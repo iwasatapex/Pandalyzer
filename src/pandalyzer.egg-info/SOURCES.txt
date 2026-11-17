@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+src/autoclean/__init__.py
+src/autoclean/cleaner.py
+src/autoclean/connectors.py
+src/autoclean/profiler.py
+src/autoclean/validators.py
+src/pandalyzer.egg-info/PKG-INFO
+src/pandalyzer.egg-info/SOURCES.txt
+src/pandalyzer.egg-info/dependency_links.txt
+src/pandalyzer.egg-info/requires.txt
+src/pandalyzer.egg-info/top_level.txt
+tests/test_cleaner.py
+tests/test_profiler.py
+tests/test_profiler_integration.py
+tests/test_validators.py

@@ -1,0 +1,37 @@
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pandalyzer"
+version = "0.1.0"
+description = "A data profiling and quality analysis toolkit built with pandas"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "openpyxl",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["autoclean"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+

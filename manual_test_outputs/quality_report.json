@@ -1,0 +1,72 @@
+{
+  "summary": {
+    "rows": 3,
+    "missing_cells": 0
+  },
+  "columns": {
+    "count": {
+      "id": 3.0,
+      "category": 3,
+      "amount": 3.0
+    },
+    "unique": {
+      "id": NaN,
+      "category": 3,
+      "amount": NaN
+    },
+    "top": {
+      "id": NaN,
+      "category": "books",
+      "amount": NaN
+    },
+    "freq": {
+      "id": NaN,
+      "category": 1,
+      "amount": NaN
+    },
+    "mean": {
+      "id": 2.0,
+      "category": NaN,
+      "amount": 20.25
+    },
+    "std": {
+      "id": 1.0,
+      "category": NaN,
+      "amount": 9.877373132569206
+    },
+    "min": {
+      "id": 1.0,
+      "category": NaN,
+      "amount": 10.5
+    },
+    "25%": {
+      "id": 1.5,
+      "category": NaN,
+      "amount": 15.25
+    },
+    "50%": {
+      "id": 2.0,
+      "category": NaN,
+      "amount": 20.0
+    },
+    "75%": {
+      "id": 2.5,
+      "category": NaN,
+      "amount": 25.125
+    },
+    "max": {
+      "id": 3.0,
+      "category": NaN,
+      "amount": 30.25
+    }
+  },
+  "missing_by_column": {
+    "id": 0,
+    "category": 0,
+    "amount": 0
+  },
+  "notes": [
+    "manual connector test",
+    "round-trip"
+  ]
+}

@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: pandalyzer
+Version: 0.1.0
+Summary: A data profiling and quality analysis toolkit built with pandas
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pandas
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: openpyxl; extra == "dev"
