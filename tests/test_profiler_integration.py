@@ -1,10 +1,8 @@
-
 from pathlib import Path
 
 import pandas as pd
 
 from autoclean.profiler import profile_dataframe
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATASET_PATH = PROJECT_ROOT / "database" / "messy_retail_orders.csv"
@@ -77,6 +75,7 @@ def test_profiler_on_real_dataset():
 # --- Pandalyzer end-to-end workflow tests ---
 def test_csv_to_cleaned_export_and_quality_report(tmp_path):
     import json
+
     import pandas as pd
 
     from autoclean.cleaner import clean_dataframe

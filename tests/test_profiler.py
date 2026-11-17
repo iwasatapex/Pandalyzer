@@ -1,9 +1,8 @@
-
 import pandas as pd
 import pandas.testing as pdt
 import pytest
 
-from autoclean.profiler import profile_dataframe
+from autoclean.profiler import compare_data_quality, profile_dataframe
 
 
 def test_profile_counts_and_column_metrics():
@@ -259,9 +258,6 @@ def test_profiler_preserves_metrics_for_duplicate_column_names():
 
 
 # --- Pandalyzer extension tests: quality comparison ---
-import pandas as pd
-import pytest
-from autoclean.profiler import compare_data_quality
 
 def test_compare_data_quality_reports_changes():
     result = compare_data_quality(pd.DataFrame({"x": [1, None, 1]}), pd.DataFrame({"x": [1, 2]}))

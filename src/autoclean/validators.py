@@ -1,4 +1,3 @@
-
 import pandas as pd
 
 
@@ -19,7 +18,6 @@ def validate_missing_values(
     return missing_percent[missing_percent > threshold].index.tolist()
 
 
-# --- Pandalyzer extension: schema and range validation ---
 def validate_required_columns(df: pd.DataFrame, required_columns: list[str]) -> list[str]:
     """Return required column names that are absent from the DataFrame."""
     if not isinstance(df, pd.DataFrame):
@@ -35,15 +33,20 @@ def validate_column_types(df: pd.DataFrame, expected_types: dict[str, object]) -
         raise TypeError("Input must be a pandas DataFrame.")
     if not isinstance(expected_types, dict):
         raise TypeError("expected_types must be a dictionary.")
-    problems = {}
+    # Resolve every expected dtype first so an invalid spec always raises,
+    # even when its column happens to be missing from the DataFrame.
+    resolved = {}
     for column, expected in expected_types.items():
+        try:
+            resolved[column] = pd.api.types.pandas_dtype(expected)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid expected dtype for column {column!r}: {expected!r}") from exc
+
+    problems = {}
+    for column, expected_dtype in resolved.items():
         if column not in df.columns:
             problems[column] = "missing column"
             continue
-        try:
-            expected_dtype = pd.api.types.pandas_dtype(expected)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"Invalid expected dtype for column {column!r}: {expected!r}") from exc
         if not pd.api.types.is_dtype_equal(df[column].dtype, expected_dtype):
             problems[column] = f"expected {expected_dtype}, found {df[column].dtype}"
     return problems

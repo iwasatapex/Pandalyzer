@@ -1,6 +1,12 @@
-
 import pandas as pd
-from autoclean.validators import validate_missing_values
+import pytest
+
+from autoclean.validators import (
+    validate_column_types,
+    validate_missing_values,
+    validate_numeric_ranges,
+    validate_required_columns,
+)
 
 
 def test_flags_columns_above_missing_threshold():
@@ -25,19 +31,6 @@ def test_does_not_flag_column_at_exact_threshold():
     assert result == []
 
 
-def test_does_not_flag_column_at_exact_threshold():
-    df = pd.DataFrame({
-        "customer": ["Alice", None, "Charlie", None],
-        "amount": [100, 200, 300, 400],
-    })
-
-    result = validate_missing_values(df, threshold=50)
-
-    assert result == []
-
-import pytest
-
-
 def test_rejects_threshold_above_100():
     df = pd.DataFrame({"customer": ["Alice", None]})
 
@@ -58,7 +51,6 @@ def test_handles_empty_dataframe():
     result = validate_missing_values(df, threshold=50)
 
     assert result == []
-
 
 
 def test_rejects_non_dataframe_input():
@@ -101,20 +93,8 @@ def test_does_not_flag_columns_at_100_percent_threshold():
     assert result == []
 
 
-def test_does_not_flag_columns_at_100_percent_threshold():
-    df = pd.DataFrame({
-        "customer": [None, None, None],
-        "amount": [100, None, 300],
-    })
-
-    result = validate_missing_values(df, threshold=100)
-
-    assert result == []
-
 # --- Pandalyzer extension tests: schema and range validation ---
-import pandas as pd
-import pytest
-from autoclean.validators import validate_required_columns, validate_column_types, validate_numeric_ranges
+
 
 def test_validate_required_columns_returns_missing_names():
     assert validate_required_columns(pd.DataFrame({"id": [1]}), ["id", "status"]) == ["status"]

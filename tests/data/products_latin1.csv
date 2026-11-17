@@ -1,0 +1,116 @@
+sku,product_name,description,price,discount,in_stock,category
+00100,"Jalapeño Salsa, Hot #0","Line one
+Line two, with comma","$1,559.14",10%,yes,GARDEN
+00101,Smörgåsbord Tray #1,Simple item,"$1,624.19",5%,yes,Garden
+00102,"Jalapeño Salsa, Hot #2",Simple item,"$2,171.77",15%,yes,Pantry
+00103,"Jalapeño Salsa, Hot #3",Simple item,$37.72,5%,no,Garden
+00104,"Jalapeño Salsa, Hot #4",Simple item,"$2,291.28",15%,yes,Kitchen
+00105,"Café, Crème Brûlée #5",Simple item,"$1,546.73",15%,yes,Kitchen
+00106,"Jalapeño Salsa, Hot #6",Simple item,"$2,430.98",0%,yes,Kitchen
+00107,Piña Colada Mix #7,"Line one
+Line two, with comma","$2,181.66",10%,no,Kitchen
+00108,"Jalapeño Salsa, Hot #8",Simple item,"$2,190.92",5%,yes,PANTRY
+SKU-9,Pâté de Campagne #9,Simple item,"$2,416.58",15%,no,Kitchen
+00110,Pâté de Campagne #10,Simple item,"$1,040.19",5%,no,Kitchen
+00111,Pâté de Campagne #11,Simple item,$756.89,20%,yes,Pantry
+00112,Pâté de Campagne #12,Simple item,$169.73,10%,no,garden
+00113,Pâté de Campagne #13,Simple item,$466.01,15%,yes,Kitchen
+00114,"Café, Crème Brûlée #14","Line one
+Line two, with comma","$2,437.87",0%,no,Garden
+00115,Piña Colada Mix #15,Simple item,"$1,374.92",15%,no,Garden
+00116,"Jalapeño Salsa, Hot #16",Simple item,"$2,103.88",15%,yes,PANTRY
+00117,Smörgåsbord Tray #17,Simple item,"$1,561.16",5%,yes,Kitchen
+00118,"Café, Crème Brûlée #18",Simple item,$864.23,10%,no,Garden
+SKU-19,Smörgåsbord Tray #19,Simple item,"$1,476.46",10%,no,Kitchen
+00120,Piña Colada Mix #20,Simple item,"$2,364.77",0%,yes,Garden
+00121,Piña Colada Mix #21,"Line one
+Line two, with comma","$1,529.01",5%,no,Garden
+00122,"Café, Crème Brûlée #22",Simple item,$234.72,10%,no,Kitchen
+00123,"Café, Crème Brûlée #23",Simple item,"$1,568.88",10%,no,Kitchen
+00124,"Jalapeño Salsa, Hot #24",Simple item,$206.99,20%,no,KITCHEN
+00125,Smörgåsbord Tray #25,Simple item,"$1,852.69",10%,no,Garden
+00126,"Jalapeño Salsa, Hot #26",Simple item,$368.34,0%,no,Garden
+00127,Smörgåsbord Tray #27,Simple item,$330.78,20%,yes,Pantry
+00128,"Café, Crème Brûlée #28","Line one
+Line two, with comma",$271.04,15%,no,Kitchen
+SKU-29,Piña Colada Mix #29,Simple item,"$2,112.61",10%,yes,Garden
+00130,Pâté de Campagne #30,Simple item,"$2,131.37",20%,no,Garden
+00131,"Jalapeño Salsa, Hot #31",Simple item,"$1,200.21",10%,no,Garden
+00132,Smörgåsbord Tray #32,Simple item,$285.84,20%,yes,PANTRY
+00133,Pâté de Campagne #33,Simple item,"$2,170.16",150%,yes,Garden
+00134,Pâté de Campagne #34,Simple item,"$1,290.37",20%,no,Kitchen
+00135,Piña Colada Mix #35,"Line one
+Line two, with comma","$1,738.02",0%,no,Garden
+00136,Pâté de Campagne #36,Simple item,"$1,762.65",10%,no,garden
+00137,"Café, Crème Brûlée #37",Simple item,"$2,392.43",10%,yes,Pantry
+00138,Pâté de Campagne #38,Simple item,"$1,188.39",10%,no,Pantry
+SKU-39,Pâté de Campagne #39,Simple item,"$1,160.03",20%,no,Garden
+00140,Smörgåsbord Tray #40,Simple item,"$1,611.94",15%,no,KITCHEN
+00141,"Jalapeño Salsa, Hot #41",Simple item,"$2,440.42",10%,yes,Pantry
+00142,"Café, Crème Brûlée #42","Line one
+Line two, with comma",$500.64,10%,no,Garden
+00143,Piña Colada Mix #43,Simple item,"$1,800.62",15%,yes,Pantry
+00144,Piña Colada Mix #44,Simple item,"$1,293.56",15%,no,Pantry
+00145,"Jalapeño Salsa, Hot #45",Simple item,"$1,937.89",10%,yes,Kitchen
+00146,"Jalapeño Salsa, Hot #46",Simple item,"$1,468.19",20%,yes,Kitchen
+00147,"Jalapeño Salsa, Hot #47",Simple item,"$1,579.01",0%,no,Kitchen
+00148,"Jalapeño Salsa, Hot #48",Simple item,$140.09,5%,yes,GARDEN
+SKU-49,Smörgåsbord Tray #49,"Line one
+Line two, with comma","$1,209.24",20%,yes,Garden
+00150,"Jalapeño Salsa, Hot #50",Simple item,$880.99,20%,yes,Pantry
+00151,Smörgåsbord Tray #51,Simple item,$598.43,10%,yes,Garden
+00152,Piña Colada Mix #52,Simple item,"$2,380.51",15%,yes,Pantry
+00153,Pâté de Campagne #53,Simple item,$937.83,0%,no,Kitchen
+00154,"Jalapeño Salsa, Hot #54",Simple item,"$1,365.33",10%,no,Garden
+00155,"Jalapeño Salsa, Hot #55",Simple item,"$1,050.66",20%,no,Garden
+00156,"Jalapeño Salsa, Hot #56","Line one
+Line two, with comma",$396.15,15%,no,KITCHEN
+00157,"Café, Crème Brûlée #57",Simple item,"$1,523.48",10%,yes,Garden
+00158,Piña Colada Mix #58,Simple item,$818.48,20%,yes,Garden
+SKU-59,Pâté de Campagne #59,Simple item,$942.74,15%,yes,Garden
+00160,Piña Colada Mix #60,Simple item,"$1,201.54",15%,no,kitchen
+00161,Smörgåsbord Tray #61,Simple item,"$1,486.91",10%,no,Garden
+00162,"Jalapeño Salsa, Hot #62",Simple item,$54.08,10%,no,Garden
+00163,Pâté de Campagne #63,"Line one
+Line two, with comma","$1,194.95",0%,no,Kitchen
+00164,Smörgåsbord Tray #64,Simple item,$104.74,5%,no,KITCHEN
+00165,"Café, Crème Brûlée #65",Simple item,"$1,333.75",10%,yes,Garden
+00166,Pâté de Campagne #66,Simple item,$617.92,10%,yes,Pantry
+00167,Piña Colada Mix #67,Simple item,$736.50,20%,no,Pantry
+00168,Pâté de Campagne #68,Simple item,"$2,202.25",0%,yes,Kitchen
+SKU-69,Piña Colada Mix #69,Simple item,$709.46,10%,no,Pantry
+00170,Piña Colada Mix #70,"Line one
+Line two, with comma",$71.41,10%,no,Pantry
+00171,Smörgåsbord Tray #71,Simple item,$335.54,0%,no,Pantry
+00172,Smörgåsbord Tray #72,Simple item,"$1,715.90",0%,yes,KITCHEN
+00173,Smörgåsbord Tray #73,Simple item,"$1,947.06",15%,no,Garden
+00174,"Café, Crème Brûlée #74",Simple item,$982.70,5%,no,Garden
+00175,Pâté de Campagne #75,Simple item,$762.61,0%,no,Pantry
+00176,"Jalapeño Salsa, Hot #76",Simple item,"$1,622.74",15%,no,Kitchen
+00177,Piña Colada Mix #77,"Line one
+Line two, with comma","$1,198.64",20%,no,Garden
+00178,"Jalapeño Salsa, Hot #78",Simple item,$388.05,20%,yes,Kitchen
+SKU-79,"Café, Crème Brûlée #79",Simple item,$671.68,0%,yes,Pantry
+00180,Smörgåsbord Tray #80,Simple item,$835.96,15%,yes,GARDEN
+00181,"Café, Crème Brûlée #81",Simple item,$126.99,0%,yes,Pantry
+00182,Smörgåsbord Tray #82,Simple item,"$1,782.55",5%,no,Pantry
+00183,"Jalapeño Salsa, Hot #83",Simple item,$378.58,20%,yes,Garden
+00184,"Café, Crème Brûlée #84","Line one
+Line two, with comma",$172.73,5%,yes,pantry
+00185,Piña Colada Mix #85,Simple item,"$1,652.23",0%,no,Kitchen
+00186,Smörgåsbord Tray #86,Simple item,"$1,440.26",15%,yes,Kitchen
+00187,Pâté de Campagne #87,Simple item,$233.14,20%,no,Garden
+00188,Pâté de Campagne #88,Simple item,"$2,346.65",10%,yes,KITCHEN
+SKU-89,Piña Colada Mix #89,Simple item,$382.02,20%,no,Pantry
+00190,"Jalapeño Salsa, Hot #90",Simple item,"$1,554.09",10%,yes,Pantry
+00191,Pâté de Campagne #91,"Line one
+Line two, with comma",$639.20,10%,yes,Kitchen
+00192,"Café, Crème Brûlée #92",Simple item,"$1,136.08",15%,yes,Kitchen
+00193,"Café, Crème Brûlée #93",Simple item,"$1,639.26",0%,yes,Kitchen
+00194,Smörgåsbord Tray #94,Simple item,"$1,268.64",15%,yes,Garden
+00195,"Café, Crème Brûlée #95",Simple item,"$1,203.77",10%,yes,Pantry
+00196,Smörgåsbord Tray #96,Simple item,"$1,357.54",15%,yes,KITCHEN
+00197,Smörgåsbord Tray #97,Simple item,"$1,704.38",5%,yes,Kitchen
+00198,"Jalapeño Salsa, Hot #98","Line one
+Line two, with comma","$2,052.39",5%,no,Garden
+00103,"Jalapeño Salsa, Hot #3",Simple item,$37.72,5%,no,Garden

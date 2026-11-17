@@ -1,11 +1,13 @@
-
 import pandas as pd
 import pandas.testing as pdt
 import pytest
+
 from autoclean.cleaner import (
+    clean_dataframe,
     handle_missing_values,
     remove_duplicate_rows,
 )
+
 
 def test_removes_exact_duplicate_rows():
     df = pd.DataFrame({
@@ -429,9 +431,6 @@ def test_fill_median_rejects_dataframe_without_numeric_columns():
         )
 
 # --- Pandalyzer extension tests: end-to-end cleaning helper ---
-import pandas as pd
-import pytest
-from autoclean.cleaner import clean_dataframe
 
 def test_clean_dataframe_removes_duplicates_then_drops_missing_rows():
     df = pd.DataFrame({"id": [1, 1, 2], "amount": [10.0, 10.0, None]})

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT="/run/media/amateur/MATRIX/Pandalyzer/AutoClean"
+PROJECT="${PROJECT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 PYTHON="${PYTHON:-python}"
 
 if [[ ! -d "$PROJECT/src/autoclean" || ! -d "$PROJECT/tests" ]]; then
   echo "ERROR: Pandalyzer project not found at: $PROJECT" >&2
-  echo "Edit PROJECT near the top of this script if the project is elsewhere." >&2
+  echo "Set PROJECT=/path/to/Pandalyzer if the project is elsewhere." >&2
   exit 1
 fi
 cd "$PROJECT"
 STAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP="../AutoClean_backup_${STAMP}"
+BACKUP="../Pandalyzer_backup_${STAMP}"
 mkdir -p "$BACKUP"
 cp -a src tests pyproject.toml README.md requirements.txt "$BACKUP/" 2>/dev/null || true
 echo "Backup created at: $BACKUP"

@@ -1,7 +1,9 @@
+import json
 
 import pandas as pd
+import pytest
 
-from autoclean.connectors import load_csv
+from autoclean.connectors import load_csv, save_csv, save_quality_report
 
 
 def test_loads_csv_into_dataframe(tmp_path):
@@ -17,9 +19,6 @@ def test_loads_csv_into_dataframe(tmp_path):
     assert result.shape == (2, 2)
     assert result["order_id"].tolist() == [1, 2]
     assert result["amount"].tolist() == [100, 250]
-
-
-import pytest
 
 
 def test_raises_error_for_missing_csv(tmp_path):
@@ -145,20 +144,6 @@ def test_default_loading_infers_numeric_identifiers(tmp_path):
     assert result["customer_id"].tolist() == [123, 456]
 
 
-def test_default_loading_infers_numeric_identifiers(tmp_path):
-    csv_file = tmp_path / "leading_zeros.csv"
-    csv_file.write_text(
-        "customer_id,amount\n"
-        "00123,100\n"
-        "00456,200\n",
-        encoding="utf-8",
-    )
-
-    result = load_csv(csv_file)
-
-    assert result["customer_id"].tolist() == [123, 456]
-
-
 def test_loads_csv_with_utf8_text(tmp_path):
     csv_file = tmp_path / "utf8.csv"
     csv_file.write_text(
@@ -259,10 +244,6 @@ def test_load_csv_does_not_modify_source_file(tmp_path):
     assert csv_file.read_text(encoding="utf-8") == original_content
 
 # --- Pandalyzer extension tests: exports ---
-import json
-import pandas as pd
-import pytest
-from autoclean.connectors import save_csv, save_quality_report
 
 def test_save_csv_writes_csv_and_returns_path(tmp_path):
     df = pd.DataFrame({"id": [1, 2], "name": ["A", "B"]})
