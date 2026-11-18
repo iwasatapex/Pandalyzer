@@ -1,4 +1,4 @@
-"""Deterministic generator for the 10 end-to-end CSV fixtures in ``tests/data``.
+"""Deterministic generator for the 15 end-to-end CSV fixtures in ``tests/data``.
 
 Each fixture is a 100-row file with its own schema, format and planted
 problems (duplicates, empty rows, placeholders, outliers, mixed formats).
@@ -38,6 +38,9 @@ class CsvFixture:
     sep: str = ","
     encoding: str = "utf-8"
     container: str = "plain"  # "plain", "gzip" or "zip"
+    line_terminator: str = "\n"
+    # Title/notes lines written above the header (report exports).
+    preamble: list[str] = field(default_factory=list)
     load_kwargs: dict = field(default_factory=dict)
     clean_kwargs: dict = field(default_factory=dict)
     raw_columns: list[str] = field(default_factory=list)
@@ -51,6 +54,8 @@ class CsvFixture:
     checks: dict[tuple[int, str], object] = field(default_factory=dict)
     # Row labels auto_clean must drop (duplicates and empty rows).
     dropped: set[int] = field(default_factory=set)
+    # Column -> number of malformed emails validate_emails must flag in the raw file.
+    invalid_emails: dict[str, int] = field(default_factory=dict)
     expect_parser_warning: bool = False
 
     def __post_init__(self):
@@ -58,7 +63,9 @@ class CsvFixture:
 
     def to_bytes(self) -> bytes:
         buffer = io.StringIO(newline="")
-        writer = csv.writer(buffer, delimiter=self.sep, lineterminator="\n")
+        for line in self.preamble:
+            buffer.write(line + self.line_terminator)
+        writer = csv.writer(buffer, delimiter=self.sep, lineterminator=self.line_terminator)
         writer.writerow(self.header)
         writer.writerows(self.rows)
         payload = buffer.getvalue().encode(self.encoding)
@@ -70,7 +77,9 @@ class CsvFixture:
         if self.container == "zip":
             out = io.BytesIO()
             with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
-                info = zipfile.ZipInfo(self.file_name.removesuffix(".zip") + ".csv", (2024, 1, 1, 0, 0, 0))
+                info = zipfile.ZipInfo(
+                    self.file_name.removesuffix(".zip") + ".csv", (2024, 1, 1, 0, 0, 0)
+                )
                 archive.writestr(info, payload)
             return out.getvalue()
         return payload
@@ -140,11 +149,24 @@ def retail_orders() -> CsvFixture:
         description="comma, UTF-8, mixed date formats, ₹ prices, Yes/No, near-duplicates",
         header=["order_id", "order_date", "customer", "quantity", "unit_price", "paid", "channel"],
         rows=rows,
-        raw_columns=["order_id", "order_date", "customer", "quantity", "unit_price", "paid", "channel"],
+        raw_columns=[
+            "order_id",
+            "order_date",
+            "customer",
+            "quantity",
+            "unit_price",
+            "paid",
+            "channel",
+        ],
         clean_rows=96,
         clean_kinds={
-            "order_id": "text", "order_date": "datetime", "customer": "text", "quantity": "int",
-            "unit_price": "float", "paid": "bool", "channel": "text",
+            "order_id": "text",
+            "order_date": "datetime",
+            "customer": "text",
+            "quantity": "int",
+            "unit_price": "float",
+            "paid": "bool",
+            "channel": "text",
         },
         ranges={"quantity": (1, 50, 2)},
         checks=checks,
@@ -163,11 +185,20 @@ def _eu_number(value: float) -> str:
 
 def employees_eu() -> CsvFixture:
     rng = random.Random(2)
-    names = ["José Müller", "Zoë Dupont", "François Lévesque", "Søren Æbelø", "Ana Peña", "Jürgen Groß"]
+    names = [
+        "José Müller",
+        "Zoë Dupont",
+        "François Lévesque",
+        "Søren Æbelø",
+        "Ana Peña",
+        "Jürgen Groß",
+    ]
     departments = ["Vertrieb", "Technik", "Personal", "Einkauf"]
     rows, checks = [], {}
     for i in range(ROWS):
-        salary = round(rng.uniform(500, 999), 2) if i % 10 == 0 else round(rng.uniform(2000, 9000), 2)
+        salary = (
+            round(rng.uniform(500, 999), 2) if i % 10 == 0 else round(rng.uniform(2000, 9000), 2)
+        )
         day, month, year = rng.randint(1, 28), rng.randint(1, 12), rng.randint(2015, 2023)
         remote = rng.choice(["true", "false"])
         rows.append(
@@ -199,8 +230,12 @@ def employees_eu() -> CsvFixture:
         raw_columns=["Mitarbeiter-ID", "Name", "Abteilung", "Gehalt", "Eintritt", "Remote"],
         clean_rows=98,
         clean_kinds={
-            "Mitarbeiter-ID": "text", "Name": "text", "Abteilung": "text", "Gehalt": "float",
-            "Eintritt": "datetime", "Remote": "bool",
+            "Mitarbeiter-ID": "text",
+            "Name": "text",
+            "Abteilung": "text",
+            "Gehalt": "float",
+            "Eintritt": "datetime",
+            "Remote": "bool",
         },
         ranges={"Gehalt": (0, None, 1)},
         checks=checks,
@@ -248,15 +283,33 @@ def sensor_readings() -> CsvFixture:
     return CsvFixture(
         file_name="sensor_readings.tsv",
         description="tab-separated, ISO timestamps, ERR readings, 45% humidity, 1.0132e+03",
-        header=["sensor_id", "timestamp", "temperature_c", "humidity_pct", "pressure_hpa",
-                "battery_ok", "reading_count"],
+        header=[
+            "sensor_id",
+            "timestamp",
+            "temperature_c",
+            "humidity_pct",
+            "pressure_hpa",
+            "battery_ok",
+            "reading_count",
+        ],
         rows=rows,
         sep="\t",
-        raw_columns=["sensor_id", "timestamp", "temperature_c", "humidity_pct", "pressure_hpa",
-                     "battery_ok", "reading_count"],
+        raw_columns=[
+            "sensor_id",
+            "timestamp",
+            "temperature_c",
+            "humidity_pct",
+            "pressure_hpa",
+            "battery_ok",
+            "reading_count",
+        ],
         clean_kinds={
-            "sensor_id": "text", "timestamp": "datetime", "temperature_c": "float",
-            "humidity_pct": "int", "pressure_hpa": "float", "battery_ok": "bool",
+            "sensor_id": "text",
+            "timestamp": "datetime",
+            "temperature_c": "float",
+            "humidity_pct": "int",
+            "pressure_hpa": "float",
+            "battery_ok": "bool",
             "reading_count": "int",
         },
         ranges={"temperature_c": (-40, 60, 2)},
@@ -310,8 +363,13 @@ def students() -> CsvFixture:
         raw_columns=["student_id", "full_name", "grade", "passed", "enrolled_on", "gpa", "club"],
         clean_rows=98,
         clean_kinds={
-            "student_id": "text", "full_name": "text", "grade": "int", "passed": "bool",
-            "enrolled_on": "datetime", "gpa": "float", "club": "text",
+            "student_id": "text",
+            "full_name": "text",
+            "grade": "int",
+            "passed": "bool",
+            "enrolled_on": "datetime",
+            "gpa": "float",
+            "club": "text",
         },
         ranges={"grade": (0, 100, 2)},
         checks=checks,
@@ -326,8 +384,13 @@ def students() -> CsvFixture:
 
 def products() -> CsvFixture:
     rng = random.Random(5)
-    names = ["Café, Crème Brûlée", "Jalapeño Salsa, Hot", "Pâté de Campagne", "Smörgåsbord Tray",
-             "Piña Colada Mix"]
+    names = [
+        "Café, Crème Brûlée",
+        "Jalapeño Salsa, Hot",
+        "Pâté de Campagne",
+        "Smörgåsbord Tray",
+        "Piña Colada Mix",
+    ]
     categories = ["Kitchen", "Garden", "Pantry"]
     rows, checks = [], {}
     for i in range(ROWS):
@@ -365,11 +428,24 @@ def products() -> CsvFixture:
         header=["sku", "product_name", "description", "price", "discount", "in_stock", "category"],
         rows=rows,
         encoding="latin-1",
-        raw_columns=["sku", "product_name", "description", "price", "discount", "in_stock", "category"],
+        raw_columns=[
+            "sku",
+            "product_name",
+            "description",
+            "price",
+            "discount",
+            "in_stock",
+            "category",
+        ],
         clean_rows=99,
         clean_kinds={
-            "sku": "text", "product_name": "text", "description": "text", "price": "float",
-            "discount": "int", "in_stock": "bool", "category": "text",
+            "sku": "text",
+            "product_name": "text",
+            "description": "text",
+            "price": "float",
+            "discount": "int",
+            "in_stock": "bool",
+            "category": "text",
         },
         ranges={"discount": (0, 100, 1)},
         checks=checks,
@@ -387,7 +463,12 @@ def survey() -> CsvFixture:
     rows, checks = [], {}
     for i in range(ROWS):
         age = rng.randint(18, 80)
-        month, day, hour, minute = rng.randint(1, 12), rng.randint(1, 28), rng.randint(0, 23), rng.randint(0, 59)
+        month, day, hour, minute = (
+            rng.randint(1, 12),
+            rng.randint(1, 28),
+            rng.randint(0, 23),
+            rng.randint(0, 59),
+        )
         recommend = rng.choice(["Yes", "No", "yes", "NO"])
         rows.append(
             [
@@ -395,7 +476,9 @@ def survey() -> CsvFixture:
                 rng.choice(["N/A", "-", "?", "", " "]) if i % 10 == 1 else str(age),
                 str(rng.randint(1, 5)),
                 recommend,
-                rng.choice(["Great service", "Too slow, honestly", "n/a", "Loved it!"]) if i % 3 == 0 else "",
+                rng.choice(["Great service", "Too slow, honestly", "n/a", "Loved it!"])
+                if i % 3 == 0
+                else "",
                 f"{MONTHS[month - 1]} {day}, 2024 {hour:02d}:{minute:02d}",
             ]
         )
@@ -407,15 +490,34 @@ def survey() -> CsvFixture:
     checks[(1, "age")] = pd.NA
     return CsvFixture(
         file_name="survey.csv.gz",
-        description="gzip, messy headers renamed to snake_case, N/A/-/? placeholders, month-name dates",
-        header=["Respondent ID", "Age", "Satisfaction (1-5)", "Would Recommend?", "Comments", "Submitted At"],
+        description="gzip, messy headers renamed to snake_case, N/A/-/? placeholders, "
+        "month-name dates",
+        header=[
+            "Respondent ID",
+            "Age",
+            "Satisfaction (1-5)",
+            "Would Recommend?",
+            "Comments",
+            "Submitted At",
+        ],
         rows=rows,
         container="gzip",
         clean_kwargs={"column_names": "snake"},
-        raw_columns=["Respondent ID", "Age", "Satisfaction (1-5)", "Would Recommend?", "Comments", "Submitted At"],
+        raw_columns=[
+            "Respondent ID",
+            "Age",
+            "Satisfaction (1-5)",
+            "Would Recommend?",
+            "Comments",
+            "Submitted At",
+        ],
         clean_kinds={
-            "respondent_id": "text", "age": "int", "satisfaction_1_5": "int",
-            "would_recommend": "bool", "comments": "text", "submitted_at": "datetime",
+            "respondent_id": "text",
+            "age": "int",
+            "satisfaction_1_5": "int",
+            "would_recommend": "bool",
+            "comments": "text",
+            "submitted_at": "datetime",
         },
         ranges={"age": (0, 120, 1)},
         checks=checks,
@@ -463,11 +565,24 @@ def transactions() -> CsvFixture:
         header=["txn_id", "amount", "fee_pct", "created_at", "merchant", "is_refund", "currency"],
         rows=rows,
         container="zip",
-        raw_columns=["txn_id", "amount", "fee_pct", "created_at", "merchant", "is_refund", "currency"],
+        raw_columns=[
+            "txn_id",
+            "amount",
+            "fee_pct",
+            "created_at",
+            "merchant",
+            "is_refund",
+            "currency",
+        ],
         clean_rows=98,
         clean_kinds={
-            "txn_id": "text", "amount": "float", "fee_pct": "float", "created_at": "datetime",
-            "merchant": "text", "is_refund": "bool", "currency": "text",
+            "txn_id": "text",
+            "amount": "float",
+            "fee_pct": "float",
+            "created_at": "datetime",
+            "merchant": "text",
+            "is_refund": "bool",
+            "currency": "text",
         },
         ranges={"fee_pct": (0, 5, 0)},
         checks=checks,
@@ -511,14 +626,27 @@ def server_logs() -> CsvFixture:
     rows[75] = [""] * 7
     return CsvFixture(
         file_name="server_logs.csv",
-        description="trailing delimiter, ragged rows with extra fields, empty rows, IPs and versions",
+        description="trailing delimiter, ragged rows with extra fields, empty rows, "
+        "IPs and versions",
         header=["timestamp", "client_ip", "app_version", "status", "duration_ms", "path", ""],
         rows=rows,
-        raw_columns=["timestamp", "client_ip", "app_version", "status", "duration_ms", "path", "Unnamed: 6"],
+        raw_columns=[
+            "timestamp",
+            "client_ip",
+            "app_version",
+            "status",
+            "duration_ms",
+            "path",
+            "Unnamed: 6",
+        ],
         clean_rows=98,
         clean_kinds={
-            "timestamp": "datetime", "client_ip": "text", "app_version": "text", "status": "int",
-            "duration_ms": "float", "path": "text",
+            "timestamp": "datetime",
+            "client_ip": "text",
+            "app_version": "text",
+            "status": "int",
+            "duration_ms": "float",
+            "path": "text",
         },
         ranges={"status": (100, 599, 1)},
         checks=checks,
@@ -568,17 +696,54 @@ def wide_mixed() -> CsvFixture:
             checks[(i, "constant")] = "same"
     return CsvFixture(
         file_name="wide_mixed.csv",
-        description="UTF-8 BOM, duplicate header, 0/1 flags, constant and all-empty columns, JSON text",
-        header=["id", "value", "value", "flag01", "constant", "all_empty", "json_tags", "event_date",
-                "score", "level", "notes", "big_count", "ratio"],
+        description="UTF-8 BOM, duplicate header, 0/1 flags, constant and all-empty columns, "
+        "JSON text",
+        header=[
+            "id",
+            "value",
+            "value",
+            "flag01",
+            "constant",
+            "all_empty",
+            "json_tags",
+            "event_date",
+            "score",
+            "level",
+            "notes",
+            "big_count",
+            "ratio",
+        ],
         rows=rows,
         encoding="utf-8-sig",
-        raw_columns=["id", "value", "value.1", "flag01", "constant", "all_empty", "json_tags",
-                     "event_date", "score", "level", "notes", "big_count", "ratio"],
+        raw_columns=[
+            "id",
+            "value",
+            "value.1",
+            "flag01",
+            "constant",
+            "all_empty",
+            "json_tags",
+            "event_date",
+            "score",
+            "level",
+            "notes",
+            "big_count",
+            "ratio",
+        ],
         clean_kinds={
-            "id": "int", "value": "int", "value.1": "float", "flag01": "int", "constant": "text",
-            "all_empty": "float", "json_tags": "text", "event_date": "datetime", "score": "float",
-            "level": "text", "notes": "text", "big_count": "int", "ratio": "float",
+            "id": "int",
+            "value": "int",
+            "value.1": "float",
+            "flag01": "int",
+            "constant": "text",
+            "all_empty": "float",
+            "json_tags": "text",
+            "event_date": "datetime",
+            "score": "float",
+            "level": "text",
+            "notes": "text",
+            "big_count": "int",
+            "ratio": "float",
         },
         ranges={"value": (0, 100, 0), "ratio": (0, 1, 0)},
         checks=checks,
@@ -614,6 +779,365 @@ def clean_numeric() -> CsvFixture:
     )
 
 
+# ---------------------------------------------------------------------------
+# 11. CRM contacts: messy emails, names with repeated spaces, phones, zip codes
+# ---------------------------------------------------------------------------
+
+
+def crm_contacts() -> CsvFixture:
+    rng = random.Random(11)
+    firsts = ["Ann", "Ben", "Chloe", "Dev", "Ines", "Kofi", "Mei", "Omar"]
+    lasts = ["Lee", "Okafor", "Garcia", "Patel", "Novak", "Silva"]
+    phones = ["+1 (555) {a}-{b}", "555-{a}-{b}", "(555) {a} {b}", "555.{a}.{b}"]
+    countries = ["USA", "Canada", "Mexico"]
+    rows, checks = [], {}
+    for i in range(ROWS):
+        first, last = rng.choice(firsts), rng.choice(lasts)
+        name = f"{first} {last}"
+        address = f"{first}.{last}{i}@example.com".lower()
+        email = [
+            address.upper(),
+            f"mailto:{address}",
+            f"{name} <{address}>",
+            f" {address} ",
+            address,
+            address,
+        ][i % 6]
+        day, month = rng.randint(1, 28), rng.randint(1, 12)
+        country = rng.choice(countries)
+        opted_in = rng.choice(["on", "off"])
+        age = rng.randint(18, 80)
+        rows.append(
+            [
+                f"C{i:04d}",
+                f"{first}   {last}" if i % 7 == 0 else f"{first}\t{last}" if i % 11 == 0 else name,
+                email,
+                rng.choice(phones).format(a=rng.randint(100, 999), b=rng.randint(1000, 9999)),
+                f"{rng.randint(1000, 99999):05d}",
+                country.lower() if i % 5 == 0 else country,
+                opted_in.upper() if i % 8 == 0 else opted_in,
+                f"2023-{month:02d}-{day:02d}",
+                str(age),
+            ]
+        )
+        if i in (1, 2, 3, 4):
+            checks[(i, "email")] = address
+            checks[(i, "opted_in")] = opted_in == "on"
+            checks[(i, "signup_date")] = pd.Timestamp(2023, month, day)
+            checks[(i, "age")] = age
+    rows[0][4] = "02139"  # Leading-zero zip codes must stay text.
+    malformed = ["@example.com", "carol@", "DAN@@EXAMPLE.COM", "not an email", "eve@example"]
+    for offset, bad in enumerate(malformed):
+        rows[10 + offset][2] = bad
+        checks[(10 + offset, "email")] = None
+    rows[20][2], rows[21][2] = "\u2014", "(blank)"  # Placeholders, not malformed addresses.
+    rows[30][7], rows[31][8] = "<NA>", "\u2013"  # En dash.
+    rows[40][2] = "\u200b" + rows[40][2].strip()  # Zero-width space pasted from the web.
+    rows[50][8], rows[51][8] = "150", "-1"
+    rows[90] = list(rows[1])  # Same contact, email in capitals and name double-spaced.
+    rows[90][1], rows[90][2] = rows[1][1].replace(" ", "  "), checks[(1, "email")].upper()
+    rows[91] = list(rows[2])
+    rows[91][2] = checks[(2, "email")].upper()
+    rows[95] = [""] * 9
+    checks[(0, "zip_code")] = "02139"
+    checks[(7, "full_name")] = " ".join(rows[7][1].split())
+    checks[(11, "full_name")] = " ".join(rows[11][1].split())
+    checks[(20, "email")] = None
+    checks[(40, "email")] = rows[40][2].lstrip("\u200b").lower()
+    checks[(30, "signup_date")] = None
+    columns = [
+        "contact_id",
+        "full_name",
+        "email",
+        "phone",
+        "zip_code",
+        "country",
+        "opted_in",
+        "signup_date",
+        "age",
+    ]
+    return CsvFixture(
+        file_name="crm_contacts.csv",
+        description="emails in mixed case, mailto:, display names and malformed; "
+        "repeated spaces; phone formats; on/off flags; dashes as placeholders",
+        header=columns,
+        rows=rows,
+        load_kwargs={"dtype": {"zip_code": str}},
+        raw_columns=columns,
+        clean_rows=97,
+        clean_kinds={
+            "contact_id": "text",
+            "full_name": "text",
+            "email": "text",
+            "phone": "text",
+            "zip_code": "text",
+            "country": "text",
+            "opted_in": "bool",
+            "signup_date": "datetime",
+            "age": "int",
+        },
+        ranges={"age": (0, 120, 2)},
+        checks=checks,
+        dropped={90, 91, 95},
+        # The 5 malformed addresses plus the 2 placeholders, which are not yet missing.
+        invalid_emails={"email": 7},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 12. Bank statement: report title above the header, currency codes, totals
+# ---------------------------------------------------------------------------
+
+
+def bank_statement() -> CsvFixture:
+    rng = random.Random(12)
+    merchants = [
+        "CARD PAYMENT    TESCO",
+        "TRANSFER  FROM SAVINGS",
+        "DIRECT DEBIT   ENERGY CO",
+        "ATM",
+    ]
+    rows, checks, balances = [], {}, []
+    balance = 2500.0
+    for i in range(97):
+        amount = round(rng.uniform(-2500, 2500), 2)
+        balance = round(balance + amount, 2)
+        balances.append(balance)
+        day, month = rng.randint(1, 28), rng.randint(1, 3)
+        code = rng.choice(["{sign}USD {value}", "{sign}{value} USD"])
+        rows.append(
+            [
+                f"{day:02d} {MONTHS[month - 1]} 2024",
+                rng.choice(merchants),
+                f"TX{rng.randint(0, 99_999_999):08d}",
+                "CR" if amount >= 0 else "DR",
+                code.format(sign="-" if amount < 0 else "", value=f"{abs(amount):,.2f}"),
+                f"{balance:,.2f}".replace(",", " "),
+            ]
+        )
+        if i in (0, 3, 5):
+            checks[(i, "Date")] = pd.Timestamp(2024, month, day)
+            checks[(i, "Amount")] = amount
+            checks[(i, "Balance")] = balance
+            checks[(i, "Description")] = " ".join(rows[i][1].split())
+    rows[50] = list(rows[49])  # The same transaction exported twice.
+    rows[60][5], balances[60] = "-1 250.00", -1250.0
+    negative = sum(value < 0 for row, value in enumerate(balances) if row != 50)
+    rows.append([""] * 6)
+    rows.append(["Total debits", "", "", "", "-USD 12,345.67", ""])
+    rows.append(["Total credits", "", "", "", "USD 23,456.78", ""])
+    checks[(60, "Balance")] = -1250.0
+    columns = ["Date", "Description", "Reference", "Debit/Credit", "Amount", "Balance"]
+    return CsvFixture(
+        file_name="bank_statement.csv",
+        description="report title and notes above the header, USD codes before and after, "
+        "space thousands separators, Total rows at the end",
+        header=columns,
+        rows=rows,
+        preamble=["Northwind Bank - Account statement", "Generated: Apr 2, 2024", ""],
+        raw_columns=columns,
+        clean_rows=96,
+        clean_kinds={
+            "Date": "datetime",
+            "Description": "text",
+            "Reference": "text",
+            "Debit/Credit": "text",
+            "Amount": "float",
+            "Balance": "float",
+        },
+        ranges={"Balance": (0, None, negative)},
+        checks=checks,
+        dropped={50, 97, 98, 99},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 13. Merged exports: three files pasted together, header repeated mid-file
+# ---------------------------------------------------------------------------
+
+
+def merged_exports() -> CsvFixture:
+    rng = random.Random(13)
+    header = ["Region", "Store ID", "Month", "Units", "Revenue", "Returned"]
+    rows, checks = [], {}
+    for i in range(ROWS):
+        month = 1 + i // 34
+        units = rng.randint(0, 400)
+        revenue = round(units * rng.uniform(2, 30), 2)
+        returned = rng.choice(["Y", "N"])
+        rows.append(
+            [
+                rng.choice(["North", "South", "East", "West"]),
+                str(rng.randint(100, 120)),
+                f"2024-{month:02d}-01",
+                str(units),
+                f"{revenue:.2f}",
+                returned,
+            ]
+        )
+        if i in (1, 2, 40):
+            checks[(i, "Units")] = units
+            checks[(i, "Revenue")] = revenue
+            checks[(i, "Returned")] = returned == "Y"
+            checks[(i, "Month")] = pd.Timestamp(2024, month, 1)
+    rows[33] = list(header)
+    rows[66] = [" REGION ", "store id", "Month", "UNITS", "Revenue", "returned"]
+    rows[70] = list(rows[20])  # Overlap between two exports.
+    rows[5][3], rows[6][3] = "(blank)", "<NA>"
+    rows[7][4], rows[8][4] = "\u2014", "\u2013"  # Em and en dashes.
+    rows[9][5] = "(null)"
+    for row, column in ((5, "Units"), (6, "Units"), (7, "Revenue"), (8, "Revenue")):
+        checks[(row, column)] = None
+    checks[(9, "Returned")] = pd.NA
+    return CsvFixture(
+        file_name="merged_exports.csv",
+        description="three exports concatenated: header repeated mid-file (once re-cased), "
+        "overlapping rows, (blank)/<NA>/dash placeholders",
+        header=header,
+        rows=rows,
+        raw_columns=header,
+        clean_rows=97,
+        clean_kinds={
+            "Region": "text",
+            "Store ID": "int",
+            "Month": "datetime",
+            "Units": "int",
+            "Revenue": "float",
+            "Returned": "bool",
+        },
+        ranges={"Units": (0, 500, 0), "Store ID": (100, 120, 0)},
+        checks=checks,
+        dropped={33, 66, 70},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 14. International prices: Swiss 1'234.50, French 1 234,56 €, CHF codes
+# ---------------------------------------------------------------------------
+
+
+def intl_prices() -> CsvFixture:
+    rng = random.Random(14)
+    products = ["Käse\u00a0Fondue", "Schoggi  Tafel", "Montre\u00a0Classique", "Café crème"]
+    rows, checks = [], {}
+    for i in range(ROWS):
+        chf = round(rng.uniform(5, 15000), 2)
+        eur = round(rng.uniform(5, 15000), 2)
+        discount = rng.choice([0, 5, 7.5, 10, 12.5, 15])
+        weight = round(rng.uniform(0.05, 25), 3)
+        swiss = f"{chf:,.2f}".replace(",", "'")
+        french = f"{eur:,.2f}".replace(",", "\u202f").replace(".", ",")
+        rows.append(
+            [
+                f"CH-{i:04d}",
+                rng.choice(products) + ("\u200b" if i % 9 == 0 else ""),
+                f"CHF {swiss}" if i % 2 else swiss,
+                f"{french} €",
+                f"{discount} %",
+                f"{weight}",
+                rng.choice(["TRUE", "FALSE"]),
+            ]
+        )
+        if i in (0, 3, 8):
+            checks[(i, "price_chf")] = chf
+            checks[(i, "price_eur")] = eur
+            checks[(i, "discount")] = float(discount)
+            checks[(i, "weight_kg")] = weight
+            checks[(i, "product")] = " ".join(rows[i][1].replace("\u200b", "").split())
+    rows[80] = list(rows[8])  # Same item, price written with the CHF code this time.
+    rows[80][2] = "CHF " + rows[8][2]
+    rows[40][4] = "120 %"
+    checks[(40, "discount")] = 120.0
+    columns = ["sku", "product", "price_chf", "price_eur", "discount", "weight_kg", "in_stock"]
+    return CsvFixture(
+        file_name="intl_prices.csv",
+        description="semicolon; Swiss apostrophe and French narrow-space thousands, "
+        "CHF/€ before or after, NBSP and zero-width characters in names",
+        header=columns,
+        rows=rows,
+        sep=";",
+        raw_columns=columns,
+        clean_rows=99,
+        clean_kinds={
+            "sku": "text",
+            "product": "text",
+            "price_chf": "float",
+            "price_eur": "float",
+            "discount": "float",
+            "weight_kg": "float",
+            "in_stock": "bool",
+        },
+        ranges={"discount": (0, 100, 1)},
+        checks=checks,
+        dropped={80},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 15. Excel export: ="00123" codes, CRLF, line break in a header, #VALUE!
+# ---------------------------------------------------------------------------
+
+
+def excel_export() -> CsvFixture:
+    rng = random.Random(15)
+    names = ["Ana Costa", "Bo Nilsson", "Cem Yilmaz", "Dara Kim"]
+    notes = ["", "", "", "late shift", "trainee", "#N/A"]
+    rows, checks = [], {}
+    for i in range(99):
+        hours = rng.choice([4, 6.25, 7.5, 8, 9.75])
+        month, day = rng.randint(1, 12), rng.randint(13, 28)
+        rate = round(rng.uniform(15, 60), 2)
+        overtime = rng.choice(["TRUE", "FALSE"])
+        rows.append(
+            [
+                f'="{i + 1:05d}"',
+                rng.choice(names) + ("\u00a0" if i % 4 == 0 else ""),
+                ("\u200b" if i % 10 == 0 else "") + str(hours),
+                overtime,
+                f"{month}/{day}/2024",
+                f"${rate:.2f}",
+                rng.choice(notes),
+            ]
+        )
+        if i in (0, 1, 4):
+            checks[(i, "Employee Code")] = f"{i + 1:05d}"
+            checks[(i, "Hours Worked")] = float(hours)
+            checks[(i, "Overtime")] = overtime == "TRUE"
+            checks[(i, "Start Date")] = pd.Timestamp(2024, month, day)
+            checks[(i, "Rate")] = rate
+    rows[12][2] = "#VALUE!"
+    rows[30][2] = "30"
+    rows[60] = list(rows[6])
+    rows.append([""] * 7)  # Excel's trailing ",,,,,," row.
+    checks[(12, "Hours Worked")] = None
+    checks[(0, "Name")] = rows[0][1].strip()
+    raw = ["Employee Code", "Name", "Hours\r\nWorked", "Overtime", "Start Date", "Rate", "Notes"]
+    return CsvFixture(
+        file_name="excel_export.csv",
+        description='Excel: BOM, CRLF, ="00123" codes, line break inside a header, '
+        "#VALUE!/#N/A, NBSP and zero-width characters, $ rates",
+        header=raw,
+        rows=rows,
+        encoding="utf-8-sig",
+        line_terminator="\r\n",
+        load_kwargs={"dtype": {"Employee Code": str}},
+        raw_columns=raw,
+        clean_rows=98,
+        clean_kinds={
+            "Employee Code": "text",
+            "Name": "text",
+            "Hours Worked": "float",
+            "Overtime": "bool",
+            "Start Date": "datetime",
+            "Rate": "float",
+            "Notes": "text",
+        },
+        ranges={"Hours Worked": (0, 24, 1)},
+        checks=checks,
+        dropped={60, 99},
+    )
+
+
 FIXTURES: list[CsvFixture] = [
     retail_orders(),
     employees_eu(),
@@ -625,6 +1149,11 @@ FIXTURES: list[CsvFixture] = [
     server_logs(),
     wide_mixed(),
     clean_numeric(),
+    crm_contacts(),
+    bank_statement(),
+    merged_exports(),
+    intl_prices(),
+    excel_export(),
 ]
 
 

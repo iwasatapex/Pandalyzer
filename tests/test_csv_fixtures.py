@@ -20,6 +20,7 @@ from autoclean import (
     save_csv,
     save_quality_report,
     validate_column_types,
+    validate_emails,
     validate_missing_values,
     validate_numeric_ranges,
     validate_required_columns,
@@ -83,6 +84,7 @@ def test_fixture_files_match_generator(case):
 def test_load_detects_format_and_schema(case, raw):
     assert raw.shape == (case.raw_rows, len(case.raw_columns))
     assert raw.columns.tolist() == case.raw_columns
+    assert raw.attrs.get("preamble", []) == case.preamble
 
 
 def test_profile_of_raw_data_is_consistent(raw):
@@ -147,10 +149,21 @@ def test_validators_on_cleaned_data(case, cleaned):
         assert len(problems.get(column, [])) == violations, column
 
 
+def test_email_validation_before_and_after_cleaning(case, raw, cleaned):
+    result, _ = cleaned
+
+    flagged = validate_emails(raw)
+
+    assert {column: len(rows) for column, rows in flagged.items()} == case.invalid_emails
+    assert validate_emails(result, list(case.invalid_emails)) == {}
+
+
 def test_every_missing_value_strategy(case, cleaned):
     result, _ = cleaned
     numeric = [
-        c for c in result.columns if _kind(result[c]) in ("int", "float") and result[c].notna().any()
+        c
+        for c in result.columns
+        if _kind(result[c]) in ("int", "float") and result[c].notna().any()
     ]
 
     assert not handle_missing_values(result, "drop_rows").isna().any().any()
@@ -165,7 +178,9 @@ def test_every_missing_value_strategy(case, cleaned):
 
     auto = _clean(case, result, missing="auto")
     assert not auto[numeric].isna().any().any()
-    assert len(clean_dataframe(result, missing_strategy="fill_constant", fill_value="x")) == len(result)
+    assert len(clean_dataframe(result, missing_strategy="fill_constant", fill_value="x")) == len(
+        result
+    )
 
 
 def test_clean_save_reload_round_trip(case, cleaned, tmp_path):

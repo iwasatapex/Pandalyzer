@@ -5,6 +5,13 @@ from collections.abc import Hashable
 import pandas as pd
 from pandas.api.types import is_object_dtype
 
+# Regex character-class contents written as literal characters, not "\\s" or
+# "\\u" escapes: pandas runs regexes on pyarrow strings with RE2, whose "\\s"
+# is ASCII-only and which rejects "\\u" escapes, lookarounds and backreferences.
+HORIZONTAL_SPACE = " \t\f\v\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000"
+LINE_BREAKS = "\n\r\u2028\u2029"
+INVISIBLE = "\u200b\u200c\u200d\u2060\ufeff"  # Zero-width characters and stray BOMs.
+
 
 def is_text_dtype(dtype) -> bool:
     """True for object and string dtypes (``object``, ``string``, pandas 3 ``str``)."""

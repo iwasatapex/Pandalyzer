@@ -49,8 +49,7 @@ def test_raises_error_when_path_is_a_directory(tmp_path):
 def test_preserves_column_names(tmp_path):
     csv_file = tmp_path / "column_names.csv"
     csv_file.write_text(
-        "Order ID,Customer Name,Total Amount\n"
-        "1,Alice,100\n",
+        "Order ID,Customer Name,Total Amount\n1,Alice,100\n",
         encoding="utf-8",
     )
 
@@ -61,6 +60,7 @@ def test_preserves_column_names(tmp_path):
         "Customer Name",
         "Total Amount",
     ]
+
 
 def test_raises_error_for_empty_csv(tmp_path):
     csv_file = tmp_path / "empty.csv"
@@ -73,8 +73,7 @@ def test_raises_error_for_empty_csv(tmp_path):
 def test_handles_duplicate_column_names(tmp_path):
     csv_file = tmp_path / "duplicate_columns.csv"
     csv_file.write_text(
-        "id,amount,amount\n"
-        "1,100,200\n",
+        "id,amount,amount\n1,100,200\n",
         encoding="utf-8",
     )
 
@@ -103,9 +102,7 @@ def test_loads_csv_with_headers_but_no_rows(tmp_path):
 def test_infers_numeric_column_types(tmp_path):
     csv_file = tmp_path / "numeric_types.csv"
     csv_file.write_text(
-        "order_id,amount\n"
-        "1,100.5\n"
-        "2,250.75\n",
+        "order_id,amount\n1,100.5\n2,250.75\n",
         encoding="utf-8",
     )
 
@@ -114,12 +111,11 @@ def test_infers_numeric_column_types(tmp_path):
     assert pd.api.types.is_integer_dtype(result["order_id"])
     assert pd.api.types.is_float_dtype(result["amount"])
 
+
 def test_loads_quoted_values_containing_commas(tmp_path):
     csv_file = tmp_path / "quoted_commas.csv"
     csv_file.write_text(
-        'customer_id,customer_name,amount\n'
-        '1,"Smith, John",150\n'
-        '2,"Doe, Jane",200\n',
+        'customer_id,customer_name,amount\n1,"Smith, John",150\n2,"Doe, Jane",200\n',
         encoding="utf-8",
     )
 
@@ -133,9 +129,7 @@ def test_loads_quoted_values_containing_commas(tmp_path):
 def test_default_loading_infers_numeric_identifiers(tmp_path):
     csv_file = tmp_path / "leading_zeros.csv"
     csv_file.write_text(
-        "customer_id,amount\n"
-        "00123,100\n"
-        "00456,200\n",
+        "customer_id,amount\n00123,100\n00456,200\n",
         encoding="utf-8",
     )
 
@@ -147,9 +141,7 @@ def test_default_loading_infers_numeric_identifiers(tmp_path):
 def test_loads_csv_with_utf8_text(tmp_path):
     csv_file = tmp_path / "utf8.csv"
     csv_file.write_text(
-        "customer,city\n"
-        "José,Dehradun\n"
-        "Müller,Delhi\n",
+        "customer,city\nJosé,Dehradun\nMüller,Delhi\n",
         encoding="utf-8",
     )
 
@@ -162,10 +154,7 @@ def test_loads_csv_with_utf8_text(tmp_path):
 def test_loads_single_column_csv(tmp_path):
     csv_file = tmp_path / "single_column.csv"
     csv_file.write_text(
-        "product_id\n"
-        "101\n"
-        "102\n"
-        "103\n",
+        "product_id\n101\n102\n103\n",
         encoding="utf-8",
     )
 
@@ -178,8 +167,7 @@ def test_loads_single_column_csv(tmp_path):
 def test_loads_single_row_csv(tmp_path):
     csv_file = tmp_path / "single_row.csv"
     csv_file.write_text(
-        "order_id,amount\n"
-        "1,250\n",
+        "order_id,amount\n1,250\n",
         encoding="utf-8",
     )
 
@@ -193,10 +181,7 @@ def test_loads_single_row_csv(tmp_path):
 def test_preserves_row_order(tmp_path):
     csv_file = tmp_path / "row_order.csv"
     csv_file.write_text(
-        "order_id\n"
-        "30\n"
-        "10\n"
-        "20\n",
+        "order_id\n30\n10\n20\n",
         encoding="utf-8",
     )
 
@@ -208,9 +193,7 @@ def test_preserves_row_order(tmp_path):
 def test_loads_boolean_like_values_as_strings_or_objects(tmp_path):
     csv_file = tmp_path / "boolean_values.csv"
     csv_file.write_text(
-        "status\n"
-        "True\n"
-        "False\n",
+        "status\nTrue\nFalse\n",
         encoding="utf-8",
     )
 
@@ -223,8 +206,7 @@ def test_loads_boolean_like_values_as_strings_or_objects(tmp_path):
 def test_loads_csv_with_whitespace_in_values(tmp_path):
     csv_file = tmp_path / "whitespace.csv"
     csv_file.write_text(
-        "customer,city\n"
-        " Alice , Dehradun \n",
+        "customer,city\n Alice , Dehradun \n",
         encoding="utf-8",
     )
 
@@ -243,7 +225,9 @@ def test_load_csv_does_not_modify_source_file(tmp_path):
 
     assert csv_file.read_text(encoding="utf-8") == original_content
 
+
 # --- Pandalyzer extension tests: exports ---
+
 
 def test_save_csv_writes_csv_and_returns_path(tmp_path):
     df = pd.DataFrame({"id": [1, 2], "name": ["A", "B"]})
@@ -251,15 +235,22 @@ def test_save_csv_writes_csv_and_returns_path(tmp_path):
     assert path.exists()
     pd.testing.assert_frame_equal(pd.read_csv(path), df)
 
+
 def test_save_csv_rejects_non_dataframe(tmp_path):
-    with pytest.raises(TypeError): save_csv([1], tmp_path / "bad.csv")
+    with pytest.raises(TypeError):
+        save_csv([1], tmp_path / "bad.csv")
+
 
 def test_save_quality_report_writes_json(tmp_path):
     path = save_quality_report({"rows": 3, "issues": ["missing amount"]}, tmp_path / "report.json")
     assert json.loads(path.read_text(encoding="utf-8"))["rows"] == 3
 
+
 def test_save_quality_report_converts_dataframe(tmp_path):
-    path = save_quality_report({"columns": pd.DataFrame({"missing_count": [2]}, index=["amount"])}, tmp_path / "report.json")
+    path = save_quality_report(
+        {"columns": pd.DataFrame({"missing_count": [2]}, index=["amount"])},
+        tmp_path / "report.json",
+    )
     assert json.loads(path.read_text(encoding="utf-8"))["columns"]["amount"]["missing_count"] == 2
 
 
@@ -298,6 +289,7 @@ def test_quality_report_converts_pandas_na(tmp_path):
 
 def test_quality_report_converts_numpy_scalars(tmp_path):
     import numpy as np
+
     path = save_quality_report(
         {"integer": np.int64(7), "floating": np.float64(2.5)},
         tmp_path / "numpy.json",
@@ -305,9 +297,7 @@ def test_quality_report_converts_numpy_scalars(tmp_path):
     assert json.loads(path.read_text()) == {"integer": 7, "floating": 2.5}
 
 
-@pytest.mark.parametrize(
-    "error", [ValueError("cannot convert"), TypeError("cannot convert")]
-)
+@pytest.mark.parametrize("error", [ValueError("cannot convert"), TypeError("cannot convert")])
 def test_quality_report_falls_back_when_item_raises(tmp_path, error):
     class BrokenItem:
         def item(self):

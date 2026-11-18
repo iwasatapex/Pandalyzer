@@ -4,6 +4,7 @@ __pycache__/
 build/
 dist/
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 .ipynb_checkpoints/
@@ -11,3 +12,6 @@ htmlcov/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Files the notebooks write when run.
+/manual_test_outputs/

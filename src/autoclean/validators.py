@@ -1,5 +1,7 @@
 import pandas as pd
 
+from autoclean.emails import email_columns, is_valid_email
+
 
 def validate_missing_values(
     df: pd.DataFrame,
@@ -52,7 +54,9 @@ def validate_column_types(df: pd.DataFrame, expected_types: dict[str, object]) -
     return problems
 
 
-def validate_numeric_ranges(df: pd.DataFrame, ranges: dict[str, tuple[float | None, float | None]]) -> dict[str, list]:
+def validate_numeric_ranges(
+    df: pd.DataFrame, ranges: dict[str, tuple[float | None, float | None]]
+) -> dict[str, list]:
     """Return index labels of non-missing numeric values outside inclusive bounds."""
     if not isinstance(df, pd.DataFrame):
         raise TypeError("Input must be a pandas DataFrame.")
@@ -78,4 +82,26 @@ def validate_numeric_ranges(df: pd.DataFrame, ranges: dict[str, tuple[float | No
             mask |= present & (values > maximum)
         if mask.any():
             problems[column] = df.index[mask].tolist()
+    return problems
+
+
+def validate_emails(df: pd.DataFrame, columns: list | None = None) -> dict[str, list]:
+    """Return index labels of malformed email addresses, per column.
+
+    ``columns`` defaults to every column that looks like an email column.
+    Surrounding spaces, letter case, ``mailto:`` and display names
+    (``"Ann <ann@x.com>"``) are tolerated; missing values are not flagged.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Input must be a pandas DataFrame.")
+    if columns is None:
+        columns = email_columns(df)
+    problems = {}
+    for column in columns:
+        if column not in df.columns:
+            raise KeyError(f"Column not found: {column}")
+        values = df[column]
+        invalid = values.notna() & ~values.map(is_valid_email).astype(bool)
+        if invalid.any():
+            problems[column] = df.index[invalid].tolist()
     return problems

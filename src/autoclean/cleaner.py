@@ -1,9 +1,18 @@
+import math
 import re
 
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
 
-from autoclean._utils import distinct_counts, duplicated_mask, is_text_dtype
+from autoclean._utils import (
+    HORIZONTAL_SPACE,
+    INVISIBLE,
+    LINE_BREAKS,
+    distinct_counts,
+    duplicated_mask,
+    is_text_dtype,
+)
+from autoclean.emails import email_columns, normalize_email_series
 from autoclean.inference import infer_series_type
 
 MISSING_VALUE_STRATEGIES = ("drop_rows", "fill_constant", "fill_mean", "fill_median")
@@ -13,11 +22,19 @@ DEFAULT_MISSING_MARKERS = frozenset(
     {
         "", "na", "n/a", "n.a.", "nan", "null", "none", "nil", "-", "--", "?",
         "unknown", "missing", "undefined", "not available", "tbd", "tba", "#n/a", "#na",
-        "#value!", "#ref!", "#div/0!", "#null!", "#num!", "#name?",
+        "#value!", "#ref!", "#div/0!", "#null!", "#num!", "#name?", "nat", "<na>",
+        "<null>", "(blank)", "(empty)", "(null)", "(none)", "\u2013", "\u2014",
     }
 )  # fmt: skip
 
 _AUTO_NAMED_COLUMN = re.compile(r"^Unnamed: \d+(?:_level_\d+)?$")
+# Whitespace plus zero-width characters that web and Excel exports leave behind.
+_EDGE_CHARS = HORIZONTAL_SPACE + LINE_BREAKS + INVISIBLE
+_EDGE_SPACE = f"^[{_EDGE_CHARS}]+|[{_EDGE_CHARS}]+$"
+# Runs of horizontal whitespace, and any single tab/NBSP; line breaks are kept.
+_INNER_SPACE = f"[{HORIZONTAL_SPACE}]{{2,}}|[{HORIZONTAL_SPACE.removeprefix(' ')}]"
+_EXCEL_TEXT = r'^="(.*)"$'  # Excel's ="00123" trick for keeping leading zeros.
+_TOTAL_LABEL = re.compile(r"^(?:grand\s+|sub-?\s?)?totals?\b|^sum\b", re.IGNORECASE)
 
 
 def _is_numeric_column(dtype) -> bool:
@@ -165,7 +182,10 @@ def _map_strings(series: pd.Series, func) -> pd.Series:
     """Apply ``func`` to the string values of a text column, leaving other values alone."""
     if isinstance(series.dtype, pd.StringDtype):
         return func(series.str)
-    return series.map(lambda value: func(value) if isinstance(value, str) else value)
+    # pandas 3 infers "str" for a map that returns strings; keep the column's dtype.
+    return series.map(lambda value: func(value) if isinstance(value, str) else value).astype(
+        series.dtype
+    )
 
 
 def _require_dataframe(df) -> None:
@@ -176,7 +196,8 @@ def _require_dataframe(df) -> None:
 def clean_column_names(df: pd.DataFrame, style: str = "strip") -> pd.DataFrame:
     """Return a copy with tidied column names.
 
-    ``style="strip"`` trims surrounding whitespace; ``style="snake"`` also
+    ``style="strip"`` trims whitespace and collapses inner runs (including line
+    breaks in Excel headers) to one space; ``style="snake"`` also
     lower-cases and replaces non-alphanumeric runs with ``_`` (``"Order ID"``
     becomes ``"order_id"``). Blank names become ``column_<n>`` and names that
     collide get ``_2``, ``_3``… suffixes, so the result always has unique names.
@@ -187,7 +208,7 @@ def clean_column_names(df: pd.DataFrame, style: str = "strip") -> pd.DataFrame:
 
     names, seen = [], set()
     for position, column in enumerate(df.columns, start=1):
-        name = str(column).strip()
+        name = " ".join(str(column).split())
         if style == "snake":
             name = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
         name = name or f"column_{position}"
@@ -202,15 +223,42 @@ def clean_column_names(df: pd.DataFrame, style: str = "strip") -> pd.DataFrame:
     return result
 
 
-def strip_whitespace(df: pd.DataFrame) -> pd.DataFrame:
-    """Return a copy with leading/trailing whitespace (incl. tabs, NBSP) removed from text values."""
-    _require_dataframe(df)
+def _replace_text(series: pd.Series, pattern: str, replacement: str) -> pd.Series:
+    if isinstance(series.dtype, pd.StringDtype):
+        return series.str.replace(pattern, replacement, regex=True)
+    compiled = re.compile(pattern)
+    return _map_strings(series, lambda value: compiled.sub(replacement, value))
+
+
+def _map_text_columns(df: pd.DataFrame, func) -> pd.DataFrame:
     result = df.copy()
     for position in range(result.shape[1]):
         series = result.iloc[:, position]
         if is_text_dtype(series.dtype):
-            result.isetitem(position, _map_strings(series, lambda s: s.strip()))
+            result.isetitem(position, func(series))
     return result
+
+
+def strip_whitespace(df: pd.DataFrame, *, collapse: bool = True) -> pd.DataFrame:
+    """Return a copy with whitespace trimmed from text values.
+
+    Trims spaces, tabs, non-breaking spaces and zero-width characters at both
+    ends. With ``collapse`` (default) runs of spaces/tabs inside a value become
+    one space (``"John   Smith"`` -> ``"John Smith"``); line breaks are kept.
+    """
+    _require_dataframe(df)
+
+    def tidy(series):
+        series = _replace_text(series, _EDGE_SPACE, "")
+        return _replace_text(series, _INNER_SPACE, " ") if collapse else series
+
+    return _map_text_columns(df, tidy)
+
+
+def unwrap_excel_text(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy where Excel text formulas such as ``="00123"`` become ``00123``."""
+    _require_dataframe(df)
+    return _map_text_columns(df, lambda series: _replace_text(series, _EXCEL_TEXT, r"\1"))
 
 
 def standardize_missing_values(
@@ -284,6 +332,82 @@ def drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy without rows in which every value is missing."""
     _require_dataframe(df)
     return df.dropna(how="all").copy()
+
+
+def _header_keys(name) -> set[str]:
+    text = " ".join(str(name).split()).casefold()
+    # pandas renames a repeated header "id" to "id.1"; the data row still says "id".
+    return {text, re.sub(r"\.\d+$", "", text)}
+
+
+def drop_repeated_headers(df: pd.DataFrame, header=None) -> pd.DataFrame:
+    """Return a copy without rows that repeat the header (left by concatenated exports).
+
+    A row counts as a header when every value in it matches its column's name
+    (ignoring case and spacing) and at least half of the columns are filled.
+    ``header`` gives the names to compare with; it defaults to ``df.columns``
+    (pass the original names if the columns were renamed).
+    """
+    _require_dataframe(df)
+    header = list(df.columns if header is None else header)
+    if len(header) != df.shape[1]:
+        raise ValueError("header must have one name per column.")
+    if df.empty:
+        return df.copy()
+    matches = pd.Series(0, index=df.index)
+    mismatch = pd.Series(False, index=df.index)
+    for position, name in enumerate(header):
+        series = df.iloc[:, position]
+        present = series.notna().astype(bool)
+        text = series.map(lambda value: " ".join(str(value).split()).casefold())
+        same = text.isin(_header_keys(name)) & present
+        matches += same.astype(int)
+        mismatch |= present & ~same
+    is_header = ~mismatch & (matches >= max(1, math.ceil(df.shape[1] / 2)))
+    return df[~is_header].copy()
+
+
+def drop_total_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy without the summary rows at the end of a report export.
+
+    Only trailing rows are considered (empty rows between them are skipped):
+    a row is a summary when its first filled cell starts with "Total",
+    "Subtotal", "Grand total" or "Sum". Matching rows elsewhere are kept.
+    """
+    _require_dataframe(df)
+    keep = [True] * len(df)
+    for position in range(len(df) - 1, -1, -1):  # Stops at the first ordinary row.
+        filled = [value for value in df.iloc[position] if not _is_missing_scalar(value)]
+        if not filled:
+            continue
+        if not (isinstance(filled[0], str) and _TOTAL_LABEL.match(filled[0].strip())):
+            break
+        keep[position] = False
+    return df.iloc[[p for p, kept in enumerate(keep) if kept]].copy()
+
+
+def _is_missing_scalar(value) -> bool:
+    return pd.api.types.is_scalar(value) and bool(pd.isna(value))
+
+
+def normalize_emails(df: pd.DataFrame, columns=None, *, invalid: str = "missing") -> pd.DataFrame:
+    """Return a copy with email addresses trimmed, lower-cased and validated.
+
+    ``columns`` defaults to every column that looks like an email column (nearly
+    all values contain "@" and most are valid). ``mailto:`` prefixes and display
+    names (``"Ann <ann@x.com>"``) are removed. Malformed addresses become missing
+    with ``invalid="missing"`` (default) or stay as they are with ``"keep"``;
+    use :func:`autoclean.validators.validate_emails` to list them.
+    """
+    _require_dataframe(df)
+    columns = email_columns(df) if columns is None else list(columns)
+    result = df.copy()
+    for position, column in enumerate(result.columns):
+        if column in columns:
+            result.isetitem(
+                position, normalize_email_series(result.iloc[:, position], invalid=invalid)
+            )
+    return result
 
 
 # --------------------------------------------------------------------------
@@ -375,6 +499,8 @@ def auto_clean(
     column_names: str | None = "strip",
     strip_text: bool = True,
     missing_markers=DEFAULT_MISSING_MARKERS,
+    drop_artifacts: bool = True,
+    emails: str | None = "missing",
     unify_case: bool = True,
     infer_types: bool = True,
     type_threshold: float = 0.95,
@@ -391,19 +517,26 @@ def auto_clean(
 
     1. ``column_names``: ``"strip"`` (default) or ``"snake"`` tidy the
        headers and make them unique; ``None`` leaves them alone.
-    2. ``strip_text``: trim whitespace around text values.
+    2. ``strip_text``: trim whitespace and zero-width characters around text
+       values, collapse inner runs of spaces, and unwrap Excel ``="00123"``.
     3. ``missing_markers``: turn placeholders like ``"N/A"``, ``"unknown"`` or
        ``""`` into real missing values (``None`` to skip).
-    4. ``unify_case``: merge spellings that differ only by case/spacing.
-    5. ``infer_types``: convert text columns to boolean, integer (``Int64``),
+    4. ``drop_artifacts``: drop rows that repeat the header (concatenated
+       exports) and trailing "Total"/"Sum" summary rows.
+    5. ``emails``: in columns of email addresses, trim and lower-case them;
+       malformed addresses become missing (``"missing"``, default), stay as
+       they are (``"keep"``), or the step is skipped (``None``).
+    6. ``unify_case``: merge spellings that differ only by case/spacing.
+    7. ``infer_types``: convert text columns to boolean, integer (``Int64``),
        float or datetime when at least ``type_threshold`` of their values
-       parse. Handles ``"₹1,234.50"``, ``"15%"``, ``"(42)"``, ``"Yes"/"No"``
-       and mixed date formats. Leading-zero codes such as ``"00123"`` stay text.
-    6. ``drop_empty``: drop rows that are entirely empty, and empty columns
+       parse. Handles ``"₹1,234.50"``, ``"USD 1 234.50"``, ``"1'234.50"``,
+       ``"15%"``, ``"(42)"``, ``"Yes"/"No"``, ``"on"/"off"`` and mixed date
+       formats. Leading-zero codes such as ``"00123"`` stay text.
+    8. ``drop_empty``: drop rows that are entirely empty, and empty columns
        pandas auto-named ``"Unnamed: N"`` (from trailing delimiters).
-    7. ``remove_duplicates``: drop exact duplicate rows (after the fixes above,
+    9. ``remove_duplicates``: drop exact duplicate rows (after the fixes above,
        so near-duplicates that differed only by spacing/case are caught).
-    8. ``missing``: ``"keep"`` (default) leaves missing values in place;
+    10. ``missing``: ``"keep"`` (default) leaves missing values in place;
        ``"auto"`` uses :func:`fill_missing_auto`; or any
        :func:`handle_missing_values` strategy (``"drop_rows"``,
        ``"fill_mean"``, ``"fill_median"``, ``"fill_constant"`` + ``fill_value``).
@@ -420,12 +553,15 @@ def auto_clean(
             f"Unsupported missing option: {missing!r}. Expected 'keep', 'auto' or one of: "
             f"{', '.join(MISSING_VALUE_STRATEGIES)}."
         )
+    if emails not in ("missing", "keep", None):
+        raise ValueError("emails must be 'missing', 'keep' or None.")
     log: list[dict] = []
     result = df.copy()
+    original_header = list(df.columns)
 
     if column_names is not None:
         renamed = clean_column_names(result, style=column_names)
-        for old, new in zip(result.columns, renamed.columns):
+        for old, new in zip(result.columns, renamed.columns, strict=True):
             if str(old) != new:
                 log.append(_entry("rename_column", old, f"renamed to {new!r}"))
         result = renamed
@@ -435,6 +571,10 @@ def auto_clean(
             result, strip_whitespace, "strip_whitespace", log,
             lambda n: f"trimmed whitespace in {n} values",
         )  # fmt: skip
+        result = _per_column_step(
+            result, unwrap_excel_text, "unwrap_excel_text", log,
+            lambda n: f'unwrapped {n} Excel ="..." values',
+        )  # fmt: skip
 
     if missing_markers:
         result = _per_column_step(
@@ -442,6 +582,35 @@ def auto_clean(
             "standardize_missing", log,
             lambda n: f"{n} placeholder values set to missing",
         )  # fmt: skip
+
+    if drop_artifacts:
+        rows_before = len(result)
+        result = drop_repeated_headers(result, header=original_header)
+        if len(result) < rows_before:
+            log.append(
+                _entry("drop_artifacts", None, f"dropped {rows_before - len(result)} header rows")
+            )
+        rows_before = len(result)
+        result = drop_total_rows(result)
+        if len(result) < rows_before:
+            log.append(
+                _entry("drop_artifacts", None, f"dropped {rows_before - len(result)} total rows")
+            )
+
+    if emails is not None:
+        for position, column in enumerate(result.columns):
+            series = result.iloc[:, position]
+            if column not in email_columns(series.to_frame()):
+                continue
+            normalized = normalize_email_series(series, invalid=emails)
+            invalid = int(normalized.isna().sum() - series.isna().sum())
+            changed = _changed_cells(series, normalized) - invalid
+            detail = f"normalized {changed} addresses"
+            if invalid:
+                detail += f"; {invalid} invalid addresses set to missing"
+            if changed or invalid:
+                log.append(_entry("normalize_emails", column, detail))
+                result.isetitem(position, normalized)
 
     if unify_case:
         result = _per_column_step(
@@ -452,9 +621,7 @@ def auto_clean(
     if infer_types:
         for position, column in enumerate(result.columns):
             series = result.iloc[:, position]
-            converted, kind = infer_series_type(
-                series, threshold=type_threshold, dayfirst=dayfirst
-            )
+            converted, kind = infer_series_type(series, threshold=type_threshold, dayfirst=dayfirst)
             if kind is None:
                 continue
             lost = int(converted.isna().sum() - series.isna().sum())
@@ -477,14 +644,18 @@ def auto_clean(
         rows_before = len(result)
         result = drop_empty_rows(result)
         if len(result) < rows_before:
-            log.append(_entry("drop_empty", None, f"dropped {rows_before - len(result)} empty rows"))
+            log.append(
+                _entry("drop_empty", None, f"dropped {rows_before - len(result)} empty rows")
+            )
 
     if remove_duplicates:
         rows_before = len(result)
         result = remove_duplicate_rows(result)
         if len(result) < rows_before:
             log.append(
-                _entry("remove_duplicates", None, f"dropped {rows_before - len(result)} duplicate rows")
+                _entry(
+                    "remove_duplicates", None, f"dropped {rows_before - len(result)} duplicate rows"
+                )
             )
 
     if missing == "auto":

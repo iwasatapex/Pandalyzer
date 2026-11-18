@@ -10,9 +10,7 @@ DATASET_PATH = PROJECT_ROOT / "database" / "messy_retail_orders.csv"
 
 def test_profiler_on_real_dataset():
     # Verify that the dataset exists.
-    assert DATASET_PATH.is_file(), (
-        f"Dataset not found: {DATASET_PATH}"
-    )
+    assert DATASET_PATH.is_file(), f"Dataset not found: {DATASET_PATH}"
 
     # Load the real dataset.
     df = pd.read_csv(DATASET_PATH)
@@ -33,46 +31,29 @@ def test_profiler_on_real_dataset():
     assert columns.index.tolist() == df.columns.tolist()
 
     # Verify reported data types.
-    assert columns["data_type"].tolist() == (
-        df.dtypes.astype(str).tolist()
-    )
+    assert columns["data_type"].tolist() == (df.dtypes.astype(str).tolist())
 
     # Verify missing-value metrics.
-    assert columns["missing_count"].tolist() == (
-        df.isna().sum().tolist()
-    )
+    assert columns["missing_count"].tolist() == (df.isna().sum().tolist())
 
-    expected_missing_percent = (
-        (df.isna().mean() * 100).round(2).tolist()
-    )
+    expected_missing_percent = (df.isna().mean() * 100).round(2).tolist()
 
-    assert columns["missing_percent"].tolist() == (
-        expected_missing_percent
-    )
+    assert columns["missing_percent"].tolist() == (expected_missing_percent)
 
     # Verify distinct-value counts.
-    assert columns["distinct_count"].tolist() == (
-        df.nunique(dropna=True).tolist()
-    )
+    assert columns["distinct_count"].tolist() == (df.nunique(dropna=True).tolist())
 
     # Verify that metrics fall within valid bounds.
-    assert columns["missing_count"].between(
-        0, len(df)
-    ).all()
+    assert columns["missing_count"].between(0, len(df)).all()
 
-    assert columns["missing_percent"].between(
-        0, 100
-    ).all()
+    assert columns["missing_percent"].between(0, 100).all()
 
-    assert columns["distinct_count"].between(
-        0, len(df)
-    ).all()
+    assert columns["distinct_count"].between(0, len(df)).all()
 
     # Verify profiling did not modify the original DataFrame.
     pd.testing.assert_frame_equal(df, original)
 
 
-# --- Pandalyzer end-to-end workflow tests ---
 def test_csv_to_cleaned_export_and_quality_report(tmp_path):
     import json
 
@@ -106,9 +87,7 @@ def test_csv_to_cleaned_export_and_quality_report(tmp_path):
     assert before_profile["columns"].loc["amount", "missing_count"] == 2
 
     # 2. Validate the required schema and inspect missingness.
-    assert validate_required_columns(
-        loaded, ["order_id", "amount", "status"]
-    ) == []
+    assert validate_required_columns(loaded, ["order_id", "amount", "status"]) == []
     assert validate_missing_values(loaded, threshold=20) == ["amount"]
 
     # 3. Clean duplicate rows, then impute the remaining numeric missing value.
@@ -141,9 +120,7 @@ def test_csv_to_cleaned_export_and_quality_report(tmp_path):
                 "missing_columns": validate_required_columns(
                     cleaned, ["order_id", "amount", "status"]
                 ),
-                "out_of_range_rows": validate_numeric_ranges(
-                    cleaned, {"amount": (0, 100)}
-                ),
+                "out_of_range_rows": validate_numeric_ranges(cleaned, {"amount": (0, 100)}),
             },
         },
         tmp_path / "reports" / "quality_report.json",

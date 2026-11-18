@@ -1,0 +1,101 @@
+contact_id,full_name,email,phone,zip_code,country,opted_in,signup_date,age
+C0000,Omar   Novak,OMAR.NOVAK0@EXAMPLE.COM,555.744.4050,02139,canada,ON,2023-08-28,29
+C0001,Omar Garcia,mailto:omar.garcia1@example.com,555.563.3580,82674,Mexico,on,2023-02-05,56
+C0002,Ann Novak,Ann Novak <ann.novak2@example.com>,555-714-1492,61808,USA,on,2023-01-03,74
+C0003,Kofi Patel, kofi.patel3@example.com ,(555) 611 1075,87828,Mexico,on,2023-04-19,58
+C0004,Ben Patel,ben.patel4@example.com,(555) 422 4762,68224,Canada,on,2023-05-21,63
+C0005,Ines Lee,ines.lee5@example.com,(555) 495 2094,03213,usa,off,2023-10-03,24
+C0006,Ann Okafor,ANN.OKAFOR6@EXAMPLE.COM,555.529.2196,75218,Canada,off,2023-01-07,80
+C0007,Dev   Silva,mailto:dev.silva7@example.com,+1 (555) 519-2933,18641,USA,off,2023-06-09,39
+C0008,Dev Silva,Dev Silva <dev.silva8@example.com>,555.281.4086,59644,USA,OFF,2023-01-04,69
+C0009,Dev Silva, dev.silva9@example.com ,555.530.4487,01061,Canada,off,2023-03-25,25
+C0010,Ines Novak,@example.com,+1 (555) 143-3397,28950,usa,on,2023-01-10,43
+C0011,Omar	Garcia,carol@,+1 (555) 176-2476,28359,Canada,off,2023-10-01,42
+C0012,Dev Lee,DAN@@EXAMPLE.COM,555.952.3223,51606,Canada,off,2023-06-20,26
+C0013,Chloe Silva,not an email,555-262-4220,91043,USA,on,2023-05-05,64
+C0014,Mei   Patel,eve@example,+1 (555) 139-9394,34446,Canada,on,2023-02-20,24
+C0015,Dev Silva, dev.silva15@example.com ,555.400.9520,23994,canada,off,2023-07-23,70
+C0016,Ben Okafor,ben.okafor16@example.com,555-308-1271,10064,Mexico,ON,2023-08-08,35
+C0017,Ines Patel,ines.patel17@example.com,(555) 477 9699,75995,USA,on,2023-04-15,29
+C0018,Chloe Lee,CHLOE.LEE18@EXAMPLE.COM,555-704-1574,03345,Canada,off,2023-03-12,60
+C0019,Omar Garcia,mailto:omar.garcia19@example.com,+1 (555) 593-2102,96747,USA,on,2023-05-23,56
+C0020,Ines Garcia,—,(555) 854 1728,97611,usa,off,2023-02-05,52
+C0021,Chloe   Garcia,(blank),+1 (555) 992-7834,04967,Mexico,off,2023-02-12,75
+C0022,Omar	Novak,omar.novak22@example.com,+1 (555) 723-2183,11512,Mexico,off,2023-10-01,42
+C0023,Ben Silva,ben.silva23@example.com,555.551.8579,71942,Canada,off,2023-05-04,42
+C0024,Ben Novak,BEN.NOVAK24@EXAMPLE.COM,+1 (555) 592-1365,31175,USA,OFF,2023-09-25,56
+C0025,Ben Patel,mailto:ben.patel25@example.com,+1 (555) 476-5932,19772,mexico,off,2023-10-25,34
+C0026,Dev Novak,Dev Novak <dev.novak26@example.com>,555-434-7631,88280,Mexico,off,2023-06-06,49
+C0027,Ines Okafor, ines.okafor27@example.com ,555-697-6185,28511,USA,on,2023-07-21,42
+C0028,Chloe   Okafor,chloe.okafor28@example.com,(555) 941 3771,15788,USA,on,2023-06-16,78
+C0029,Omar Patel,omar.patel29@example.com,555.788.6167,94883,Canada,off,2023-04-09,58
+C0030,Omar Garcia,OMAR.GARCIA30@EXAMPLE.COM,(555) 684 6803,41505,canada,on,<NA>,61
+C0031,Ann Silva,mailto:ann.silva31@example.com,(555) 343 3308,07152,Canada,on,2023-07-05,–
+C0032,Ben Patel,Ben Patel <ben.patel32@example.com>,+1 (555) 800-4244,27128,Mexico,OFF,2023-11-04,79
+C0033,Omar	Garcia, omar.garcia33@example.com ,+1 (555) 283-4710,36698,USA,off,2023-12-06,52
+C0034,Kofi Novak,kofi.novak34@example.com,555-189-7725,95683,Mexico,on,2023-09-23,43
+C0035,Mei   Okafor,mei.okafor35@example.com,(555) 574 6348,86370,usa,on,2023-08-15,42
+C0036,Dev Lee,DEV.LEE36@EXAMPLE.COM,555-499-2439,41613,Mexico,on,2023-11-24,31
+C0037,Kofi Garcia,mailto:kofi.garcia37@example.com,555.450.7904,37078,Canada,on,2023-01-23,20
+C0038,Omar Lee,Omar Lee <omar.lee38@example.com>,(555) 803 3301,62677,Canada,on,2023-02-07,29
+C0039,Chloe Novak, chloe.novak39@example.com ,555.692.2409,30021,Mexico,off,2023-09-24,78
+C0040,Omar Novak,​omar.novak40@example.com,(555) 419 7245,80879,mexico,ON,2023-05-18,51
+C0041,Dev Garcia,dev.garcia41@example.com,555.305.7735,71241,Mexico,off,2023-03-28,54
+C0042,Ben   Novak,BEN.NOVAK42@EXAMPLE.COM,+1 (555) 628-7563,72302,Canada,on,2023-10-01,52
+C0043,Ben Patel,mailto:ben.patel43@example.com,555.523.7621,36286,USA,on,2023-12-03,77
+C0044,Dev	Patel,Dev Patel <dev.patel44@example.com>,555.637.6197,15236,Canada,off,2023-03-16,75
+C0045,Dev Patel, dev.patel45@example.com ,+1 (555) 136-4180,21385,canada,on,2023-01-20,62
+C0046,Dev Lee,dev.lee46@example.com,555.207.9186,96799,Canada,off,2023-05-22,33
+C0047,Ben Novak,ben.novak47@example.com,555.123.7156,83969,Mexico,on,2023-05-20,62
+C0048,Mei Novak,MEI.NOVAK48@EXAMPLE.COM,555-642-4541,72164,Mexico,ON,2023-03-20,73
+C0049,Chloe   Okafor,mailto:chloe.okafor49@example.com,(555) 299 4574,26499,Canada,on,2023-11-24,38
+C0050,Ben Okafor,Ben Okafor <ben.okafor50@example.com>,555.199.8123,56263,mexico,on,2023-03-08,150
+C0051,Chloe Okafor, chloe.okafor51@example.com ,555-683-6858,48359,Mexico,on,2023-11-13,-1
+C0052,Ben Silva,ben.silva52@example.com,+1 (555) 593-2739,04185,Canada,on,2023-11-17,69
+C0053,Ann Novak,ann.novak53@example.com,555-288-2883,27727,Mexico,off,2023-09-20,27
+C0054,Chloe Okafor,CHLOE.OKAFOR54@EXAMPLE.COM,555.179.2584,43837,USA,on,2023-11-10,26
+C0055,Mei	Patel,mailto:mei.patel55@example.com,(555) 113 1669,27249,canada,off,2023-09-14,31
+C0056,Chloe   Patel,Chloe Patel <chloe.patel56@example.com>,555-719-3704,13425,Mexico,OFF,2023-06-15,43
+C0057,Ann Garcia, ann.garcia57@example.com ,555-616-6586,34851,Mexico,off,2023-12-03,54
+C0058,Ines Lee,ines.lee58@example.com,(555) 651 7059,57576,USA,off,2023-12-24,26
+C0059,Chloe Patel,chloe.patel59@example.com,(555) 408 8681,14220,USA,on,2023-12-07,69
+C0060,Ann Garcia,ANN.GARCIA60@EXAMPLE.COM,(555) 445 4539,87476,usa,on,2023-10-21,35
+C0061,Mei Novak,mailto:mei.novak61@example.com,555.757.4493,92914,USA,off,2023-09-06,50
+C0062,Ben Patel,Ben Patel <ben.patel62@example.com>,555-362-8268,53632,USA,on,2023-01-19,65
+C0063,Ann   Okafor, ann.okafor63@example.com ,(555) 382 6584,73097,USA,on,2023-07-21,34
+C0064,Mei Novak,mei.novak64@example.com,+1 (555) 662-1739,51649,Mexico,OFF,2023-02-19,69
+C0065,Chloe Patel,chloe.patel65@example.com,555.530.5660,70043,canada,on,2023-03-16,45
+C0066,Mei	Novak,MEI.NOVAK66@EXAMPLE.COM,(555) 674 5645,87978,Mexico,off,2023-06-10,48
+C0067,Ines Lee,mailto:ines.lee67@example.com,555-518-7389,07919,Mexico,on,2023-04-01,58
+C0068,Kofi Silva,Kofi Silva <kofi.silva68@example.com>,555-539-8825,33888,Mexico,off,2023-01-13,22
+C0069,Dev Lee, dev.lee69@example.com ,555-718-2885,07605,Mexico,off,2023-02-17,27
+C0070,Mei   Patel,mei.patel70@example.com,555-227-6952,59047,usa,off,2023-04-04,51
+C0071,Chloe Silva,chloe.silva71@example.com,555.472.9696,18953,Mexico,off,2023-08-14,58
+C0072,Ines Silva,INES.SILVA72@EXAMPLE.COM,(555) 903 9312,82916,Canada,ON,2023-04-05,50
+C0073,Kofi Garcia,mailto:kofi.garcia73@example.com,(555) 871 4922,25879,Mexico,on,2023-10-09,58
+C0074,Dev Novak,Dev Novak <dev.novak74@example.com>,+1 (555) 109-5439,35015,Mexico,on,2023-04-21,58
+C0075,Mei Lee, mei.lee75@example.com ,(555) 174 2416,89641,usa,on,2023-01-20,52
+C0076,Chloe Novak,chloe.novak76@example.com,(555) 315 6541,46049,Canada,off,2023-11-08,48
+C0077,Omar   Silva,omar.silva77@example.com,555-555-7952,98952,USA,off,2023-02-05,69
+C0078,Ines Patel,INES.PATEL78@EXAMPLE.COM,(555) 397 9988,98793,Canada,on,2023-03-26,59
+C0079,Chloe Patel,mailto:chloe.patel79@example.com,(555) 180 9906,11881,Mexico,on,2023-06-21,47
+C0080,Mei Novak,Mei Novak <mei.novak80@example.com>,+1 (555) 177-6081,28952,mexico,OFF,2023-08-19,37
+C0081,Ben Silva, ben.silva81@example.com ,555-324-6862,87148,Mexico,off,2023-08-10,36
+C0082,Kofi Garcia,kofi.garcia82@example.com,(555) 548 9686,40946,Mexico,off,2023-06-04,54
+C0083,Omar Garcia,omar.garcia83@example.com,(555) 948 6989,04161,Mexico,on,2023-07-08,23
+C0084,Kofi   Silva,KOFI.SILVA84@EXAMPLE.COM,(555) 916 7393,71852,Canada,on,2023-10-13,65
+C0085,Chloe Novak,mailto:chloe.novak85@example.com,555.975.5611,03913,usa,on,2023-03-19,66
+C0086,Dev Novak,Dev Novak <dev.novak86@example.com>,+1 (555) 766-7926,09396,USA,off,2023-09-02,79
+C0087,Ines Novak, ines.novak87@example.com ,+1 (555) 421-2387,04402,USA,off,2023-06-03,65
+C0088,Chloe	Lee,chloe.lee88@example.com,555-600-9545,45324,Canada,ON,2023-11-24,63
+C0089,Omar Patel,omar.patel89@example.com,555.650.2187,93817,Canada,on,2023-06-12,49
+C0001,Omar  Garcia,OMAR.GARCIA1@EXAMPLE.COM,555.563.3580,82674,Mexico,on,2023-02-05,56
+C0002,Ann Novak,ANN.NOVAK2@EXAMPLE.COM,555-714-1492,61808,USA,on,2023-01-03,74
+C0092,Chloe Silva,Chloe Silva <chloe.silva92@example.com>,555.535.9668,39276,USA,off,2023-11-13,31
+C0093,Ines Lee, ines.lee93@example.com ,555-894-3939,09171,Mexico,on,2023-05-16,37
+C0094,Omar Lee,omar.lee94@example.com,555-288-6887,29490,USA,off,2023-08-19,24
+,,,,,,,,
+C0096,Ines Silva,INES.SILVA96@EXAMPLE.COM,555.450.9967,13113,Canada,OFF,2023-09-18,49
+C0097,Omar Okafor,mailto:omar.okafor97@example.com,555.640.9451,36985,USA,on,2023-01-13,69
+C0098,Ann   Silva,Ann Silva <ann.silva98@example.com>,555-830-7904,80439,Canada,off,2023-01-08,46
+C0099,Chloe	Patel, chloe.patel99@example.com ,555-752-5366,68624,USA,off,2023-06-06,76

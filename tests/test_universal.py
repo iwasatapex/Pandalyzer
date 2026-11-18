@@ -393,7 +393,9 @@ def test_every_function_accepts_every_dtype(typed_frame, tmp_path):
 
 @pytest.mark.parametrize("dtype", ["Int64", "Float64", "boolean", "category"])
 def test_fill_constant_works_for_values_outside_the_dtype(dtype):
-    values = ["a", None] if dtype == "category" else [1, None] if dtype != "boolean" else [True, None]
+    values = (
+        ["a", None] if dtype == "category" else [1, None] if dtype != "boolean" else [True, None]
+    )
     df = pd.DataFrame({"c": pd.Series(values, dtype=dtype)})
 
     result = handle_missing_values(df, "fill_constant", "missing")

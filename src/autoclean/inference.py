@@ -8,13 +8,31 @@ from pandas.api.types import is_datetime64_any_dtype, is_float_dtype, is_object_
 
 from autoclean._utils import is_text_dtype
 
-TRUE_TOKENS = frozenset({"true", "t", "yes", "y"})
-FALSE_TOKENS = frozenset({"false", "f", "no", "n"})
+TRUE_TOKENS = frozenset({"true", "t", "yes", "y", "on"})
+FALSE_TOKENS = frozenset({"false", "f", "no", "n", "off"})
 _BINARY_DIGITS = frozenset({"1", "0", "1.0", "0.0"})
 
-_CURRENCY = r"[$€£₹¥]"
-_GROUPED_NUMBER = r"[+-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?"
-_EUROPEAN_NUMBER = r"[+-]?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d+)?"
+# Symbols, plus the ISO codes of widely traded currencies ("USD 1,200", "15 EUR").
+# Codes are listed rather than matched as any 3 letters, so "SKU 123" stays text.
+_CURRENCY = (
+    r"(?:US\$|[$€£₹¥₩₽¢]|Rs\.?|USD|EUR|GBP|INR|JPY|CNY|CHF|CAD|AUD|NZD|SEK|NOK|DKK"
+    r"|PLN|CZK|HUF|RUB|BRL|MXN|ZAR|SGD|HKD|KRW|TRY|AED|SAR)"
+)
+# Thousands separators: comma, apostrophe (Swiss), space, NBSP or narrow NBSP.
+# One alternative per separator keeps them consistent within a value (RE2 has
+# no backreferences); the characters are literal for the same reason.
+_SPACES = " \u00a0\u202f"
+_APOSTROPHES = "'\u2019"  # Swiss 1'234.50, typed or typographic.
+_US_SEPARATORS = "," + _APOSTROPHES + _SPACES
+_EU_SEPARATORS = "." + _APOSTROPHES + _SPACES
+
+
+def _grouped(separators: str) -> str:
+    return "(?:" + "|".join(rf"\d{{1,3}}(?:[{sep}]\d{{3}})+" for sep in separators) + ")"
+
+
+_GROUPED_NUMBER = rf"[+-]?{_grouped(_US_SEPARATORS)}(?:\.\d+)?"
+_EUROPEAN_NUMBER = rf"[+-]?(?:{_grouped(_EU_SEPARATORS)}|\d+)(?:,\d+)?"
 _LEADING_ZERO = r"[+-]?0\d"  # "007", "00123": identifiers, not numbers.
 _MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
 # Requires a 4-digit year (or "/"/"-" with a 2-digit year, or a month name), so
@@ -48,7 +66,7 @@ def _parse_numbers(text: pd.Series) -> pd.Series:
     """Parse numbers written with currency symbols, "1,234.5" grouping, % or (negatives)."""
     cleaned = _strip_number_decorations(text)
     grouped = cleaned.str.fullmatch(_GROUPED_NUMBER).fillna(False)
-    cleaned = cleaned.where(~grouped, cleaned.str.replace(",", "", regex=False))
+    cleaned = cleaned.where(~grouped, cleaned.str.replace(f"[{_US_SEPARATORS}]", "", regex=True))
     return pd.to_numeric(cleaned, errors="coerce")
 
 
@@ -56,7 +74,8 @@ def _parse_european_numbers(text: pd.Series) -> pd.Series:
     """Parse numbers written with a decimal comma: "3,5", "1.234,50", "€ 1.200"."""
     cleaned = _strip_number_decorations(text)
     valid = cleaned.str.fullmatch(_EUROPEAN_NUMBER).fillna(False)
-    cleaned = cleaned.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    cleaned = cleaned.str.replace(f"[{_EU_SEPARATORS}]", "", regex=True)
+    cleaned = cleaned.str.replace(",", ".", regex=False)
     return pd.to_numeric(cleaned.where(valid), errors="coerce")
 
 
@@ -85,7 +104,7 @@ def _as_number(text: pd.Series, threshold: float):
 
 
 def _narrow_numbers(numbers: pd.Series):
-    """Return ``Int64`` when every value is whole, float otherwise; None if precision would be lost."""
+    """Return ``Int64`` if every value is whole, else float; None if precision would be lost."""
     present = numbers.dropna()
     if (present.abs() > _FLOAT_EXACT_LIMIT).any():
         return None  # Long digit strings (card numbers, big IDs) would lose precision.
@@ -143,7 +162,9 @@ def _narrow_typed_column(series: pd.Series):
 
     - float columns holding only whole numbers (an integer column with blanks,
       which pandas reads as float64) become ``Int64``;
-    - object columns of Python ints too big for int64 (long IDs) become text.
+    - object columns of Python ints too big for int64 (long IDs) become text;
+    - object columns of True/False with blanks (how pandas loads a boolean
+      column that has empty cells) become ``boolean``.
     """
     present = series.dropna()
     if present.empty:
@@ -153,9 +174,11 @@ def _narrow_typed_column(series: pd.Series):
         if narrowed is not None and str(narrowed.dtype) == "Int64":
             return narrowed, "integer"
         return None, None
-    if is_object_dtype(series.dtype) and present.map(
-        lambda v: isinstance(v, int) and not isinstance(v, bool)
-    ).all():
+    if not is_object_dtype(series.dtype):
+        return None, None
+    if present.map(lambda v: isinstance(v, (bool, np.bool_))).all():
+        return series.astype("boolean"), "boolean"
+    if present.map(lambda v: isinstance(v, int) and not isinstance(v, bool)).all():
         if present.abs().max() > _INT64_MAX:
             # Same text dtype pandas gives any column of strings.
             as_text = series.map(str, na_action="ignore")
@@ -178,8 +201,9 @@ def infer_series_type(
     notation, currency symbols, % or accounting "(42)" negatives.
 
     Typed columns are only narrowed: whole-number floats (integer columns
-    pandas loaded as float because of blanks) become ``Int64``, and object
-    columns of integers too big for int64 become text.
+    pandas loaded as float because of blanks) become ``Int64``, object columns
+    of True/False with blanks become ``boolean``, and object columns of
+    integers too big for int64 become text.
 
     Returns ``(series, kind)`` where kind is ``"boolean"``, ``"integer"``,
     ``"float"``, ``"datetime"``, ``"text"`` or ``None`` when nothing changed.

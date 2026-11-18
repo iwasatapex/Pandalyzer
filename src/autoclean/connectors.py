@@ -2,6 +2,7 @@ import bz2
 import codecs
 import csv
 import gzip
+import io
 import json
 import lzma
 import math
@@ -78,6 +79,56 @@ def detect_delimiter(text: str, candidates: tuple[str, ...] = CANDIDATE_DELIMITE
     return best
 
 
+def _records(text: str, delimiter: str) -> list[tuple[int, list[str]]]:
+    """The first CSV records of ``text`` with the physical line each starts on.
+
+    Parsing records (not lines) keeps a quoted header cell that contains a
+    line break, such as Excel's ``"Hours\\nWorked"``, in one piece.
+    """
+    if not text.endswith(("\n", "\r")):
+        text = text[: max(text.rfind("\n"), text.rfind("\r")) + 1]  # Drop a cut-off line.
+    reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)
+    records, start = [], 0
+    try:
+        for fields in reader:
+            records.append((start, fields))
+            start = reader.line_num
+            if len(records) >= _SNIFF_LINES:
+                break
+    except csv.Error:
+        pass
+    return records
+
+
+def _width(fields: list[str]) -> int:
+    """Number of fields, not counting trailing empty ones (a stray final delimiter)."""
+    width = len(fields)
+    while width and not fields[width - 1].strip():
+        width -= 1
+    return width
+
+
+def count_preamble_lines(text: str, delimiter: str) -> int:
+    """Count the title/notes lines above the real header of a CSV export.
+
+    Report exports often start with lines such as ``"Account statement"`` or
+    ``"Generated: Jan 5, 2024"`` and a blank line. The header is the first
+    record with as many fields as a typical row (trailing empty fields aside, so
+    rows ending in a stray delimiter don't count as wider); lines above it are
+    preamble. Returns 0 when the first line already looks like the header.
+    """
+    records = [(start, fields) for start, fields in _records(text, delimiter) if _width(fields)]
+    if not records:
+        return 0
+    typical = Counter(_width(fields) for _, fields in records).most_common(1)[0][0]
+    if typical < 2:
+        return 0
+    for start, fields in records:
+        if max(len(fields), _width(fields)) >= typical:
+            return start
+    return 0
+
+
 def load_csv(
     path: str | Path,
     *,
@@ -94,6 +145,9 @@ def load_csv(
     - Malformed rows: rows with extra fields are kept and the extra fields
       dropped, with a ``ParserWarning``, instead of failing the whole load or
       shifting columns.
+    - Preamble: title or note lines above the header (common in report
+      exports) are skipped, unless ``skiprows`` or ``header`` is given. The
+      skipped lines are kept in ``df.attrs["preamble"]``.
 
     Values are loaded as-is; use :func:`autoclean.cleaner.auto_clean` to clean
     them. Extra keyword arguments are passed through to :func:`pandas.read_csv`.
@@ -105,12 +159,25 @@ def load_csv(
 
     if encoding is None:
         encoding = detect_encoding(sample)
+    text = codecs.getincrementaldecoder(encoding)(errors="replace").decode(sample)
     if sep is None and "delimiter" not in read_csv_kwargs:
-        text = codecs.getincrementaldecoder(encoding)(errors="replace").decode(sample)
         sep = detect_delimiter(text)
 
     options = {"sep": sep, "encoding": encoding, "index_col": False, "low_memory": False}
+    preamble = []
+    if not {"skiprows", "header"} & read_csv_kwargs.keys():
+        skip = count_preamble_lines(text, read_csv_kwargs.get("delimiter", sep))
+        if skip:
+            preamble = text.splitlines()[:skip]
+            options["skiprows"] = skip
     options.update(read_csv_kwargs)
+    df = _read_csv(path, options, read_csv_kwargs, encoding)
+    if preamble:
+        df.attrs["preamble"] = preamble
+    return df
+
+
+def _read_csv(path: Path, options: dict, read_csv_kwargs: dict, encoding: str) -> pd.DataFrame:
     try:
         return pd.read_csv(path, **options)
     except UnicodeDecodeError:
