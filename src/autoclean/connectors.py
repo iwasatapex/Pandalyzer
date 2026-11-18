@@ -6,6 +6,8 @@ import io
 import json
 import lzma
 import math
+import re
+import warnings
 import zipfile
 from collections import Counter
 from datetime import date, datetime, timedelta
@@ -15,6 +17,8 @@ import numpy as np
 import pandas as pd
 
 CANDIDATE_DELIMITERS = (",", ";", "\t", "|")
+_MAX_PREAMBLE = 10  # Lines a report title block may span.
+_BARE_NUMBER = re.compile(r"[\d.,:/+-]*\d[\d.,:/+-]*")  # "2024", "1.5", "05/01/2024"
 _SAMPLE_BYTES = 256 * 1024
 _SNIFF_LINES = 50
 _COMPRESSED_OPENERS = {".gz": gzip.open, ".bz2": bz2.open, ".xz": lzma.open}
@@ -108,25 +112,80 @@ def _width(fields: list[str]) -> int:
     return width
 
 
+def _looks_like_note(fields: list[str], typical: int) -> bool:
+    """A title/notes line: much narrower than a row, or holding a bare number or date.
+
+    Header names are labels; a field such as ``" 2024"`` (from ``"Generated: Jan
+    5, 2024"``) marks a note even when the line happens to split into several fields.
+    """
+    if _width(fields) * 2 <= typical:
+        return True
+    return any(_BARE_NUMBER.fullmatch(field.strip()) for field in fields if field.strip())
+
+
 def count_preamble_lines(text: str, delimiter: str) -> int:
     """Count the title/notes lines above the real header of a CSV export.
 
     Report exports often start with lines such as ``"Account statement"`` or
-    ``"Generated: Jan 5, 2024"`` and a blank line. The header is the first
-    record with as many fields as a typical row (trailing empty fields aside, so
-    rows ending in a stray delimiter don't count as wider); lines above it are
-    preamble. Returns 0 when the first line already looks like the header.
+    ``"Generated: Jan 5, 2024"`` and a blank line. Two rules apply:
+
+    1. A block of notes that starts with a title (a much narrower line) and
+       ends in a blank line is preamble, even when a note such as
+       ``"Generated: Jan 5, 2024"`` splits into as many fields as a row.
+    2. After that, only lines above the first full-width record are candidates
+       (trailing empty fields aside, so a stray final delimiter doesn't make a
+       row wider). Everything up to a blank line among them is preamble, and so
+       is any later line that looks like a note rather than a header. A
+       narrower header above wider data rows is kept.
+
+    Returns 0 when the first line already looks like the header.
     """
-    records = [(start, fields) for start, fields in _records(text, delimiter) if _width(fields)]
-    if not records:
+    records = _records(text, delimiter)
+    widths = Counter(_width(fields) for _, fields in records if _width(fields))
+    if not widths:
         return 0
-    typical = Counter(_width(fields) for _, fields in records).most_common(1)[0][0]
+    # Most common width; a tie goes to the wider one (2 notes + 2 rows of a tiny file).
+    typical = max(widths, key=lambda width: (widths[width], width))
     if typical < 2:
         return 0
-    for start, fields in records:
-        if max(len(fields), _width(fields)) >= typical:
-            return start
-    return 0
+    header = _titled_block_end(records, typical)
+    header += _notes_above_header(records[header:], typical)
+    return records[header][0] if header < len(records) else 0
+
+
+def _titled_block_end(records: list, typical: int) -> int:
+    """Index just past a "title, notes…, blank line" block at the top, else 0."""
+    end, titled = 0, False
+    for index, (_, fields) in enumerate(records[:_MAX_PREAMBLE]):
+        if not _width(fields):
+            if titled:
+                end = index + 1
+            continue
+        if _width(fields) * 2 <= typical:
+            titled = True
+        elif not _looks_like_note(fields, typical):
+            break
+    return end
+
+
+def _notes_above_header(records: list, typical: int) -> int:
+    """Rule 2 of :func:`count_preamble_lines`: the index of the header record."""
+    first_full = next(
+        (
+            index
+            for index, (_, fields) in enumerate(records)
+            if _width(fields) and max(len(fields), _width(fields)) >= typical
+        ),
+        None,
+    )
+    if not first_full:  # None (no full-width record) or 0 (it is the first record).
+        return 0
+    leading = records[:first_full]
+    blanks = [index for index, (_, fields) in enumerate(leading) if not _width(fields)]
+    position = blanks[-1] + 1 if blanks else 0
+    while position < len(leading) and _looks_like_note(leading[position][1], typical):
+        position += 1
+    return position
 
 
 def load_csv(
@@ -163,12 +222,21 @@ def load_csv(
     if sep is None and "delimiter" not in read_csv_kwargs:
         sep = detect_delimiter(text)
 
-    options = {"sep": sep, "encoding": encoding, "index_col": False, "low_memory": False}
+    options = {"sep": sep, "encoding": encoding, "index_col": False}
+    if read_csv_kwargs.get("engine", "c") == "c":
+        options["low_memory"] = False  # A C-engine option; pandas rejects it for "python".
     preamble = []
-    if not {"skiprows", "header"} & read_csv_kwargs.keys():
-        skip = count_preamble_lines(text, read_csv_kwargs.get("delimiter", sep))
+    delimiter = read_csv_kwargs.get("delimiter", sep)
+    # csv can only sniff single-character delimiters; regex or multi-character
+    # separators (sep=r"\s+", "::") are loaded without preamble detection.
+    if (
+        isinstance(delimiter, str)
+        and len(delimiter) == 1
+        and not {"skiprows", "header"} & read_csv_kwargs.keys()
+    ):
+        skip = count_preamble_lines(text, delimiter)
         if skip:
-            preamble = text.splitlines()[:skip]
+            preamble = re.split(r"\r\n|\r|\n", text)[:skip]  # Physical lines, as csv counts.
             options["skiprows"] = skip
     options.update(read_csv_kwargs)
     df = _read_csv(path, options, read_csv_kwargs, encoding)
@@ -191,9 +259,41 @@ def _read_csv(path: Path, options: dict, read_csv_kwargs: dict, encoding: str) -
     except pd.errors.ParserError:
         if "on_bad_lines" in read_csv_kwargs or "engine" in read_csv_kwargs:
             raise
-        options.pop("low_memory")
-        options.update(engine="python", on_bad_lines="warn")
-        return pd.read_csv(path, **options)
+        return _read_ragged(path, options)
+
+
+def _read_ragged(path: Path, options: dict) -> pd.DataFrame:
+    """Read a file whose rows have more fields than its header, keeping every row.
+
+    The extra fields are dropped with one ``ParserWarning``. A callable is used
+    because ``on_bad_lines="warn"`` skips the whole row from pandas 3.1 on.
+    """
+    width = len(pd.read_csv(path, **{**options, "nrows": 0}).columns)
+    widened = []
+
+    def keep_row(fields: list[str]) -> list[str]:
+        widened.append(len(fields))
+        return fields[:width]
+
+    options = {key: value for key, value in options.items() if key != "low_memory"}
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        df = pd.read_csv(path, **options, engine="python", on_bad_lines=keep_row)
+    # pandas < 3.1 trims the rows itself (with its own warning) instead of calling keep_row.
+    trimmed_by_pandas = False
+    for warning in caught:
+        if issubclass(warning.category, pd.errors.ParserWarning):
+            trimmed_by_pandas = True
+        else:
+            warnings.warn(warning.message, warning.category, stacklevel=4)
+    if widened or trimmed_by_pandas:
+        count = f"{len(widened)} rows" if widened else "Some rows"
+        warnings.warn(
+            f"{count} had more fields than the header ({width}); their extra fields were dropped.",
+            pd.errors.ParserWarning,
+            stacklevel=4,
+        )
+    return df
 
 
 def save_csv(df: pd.DataFrame, path: str | Path, *, index: bool = False) -> Path:

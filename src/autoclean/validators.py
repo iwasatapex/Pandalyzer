@@ -1,6 +1,15 @@
+import numpy as np
 import pandas as pd
 
 from autoclean.emails import email_columns, is_valid_email
+
+
+def _columns_named(df: pd.DataFrame, name) -> list[pd.Series]:
+    """Every column called ``name`` (a frame can repeat a name); KeyError if none."""
+    found = [df.iloc[:, position] for position, column in enumerate(df.columns) if column == name]
+    if not found:
+        raise KeyError(f"Column not found: {name}")
+    return found
 
 
 def validate_missing_values(
@@ -49,8 +58,10 @@ def validate_column_types(df: pd.DataFrame, expected_types: dict[str, object]) -
         if column not in df.columns:
             problems[column] = "missing column"
             continue
-        if not pd.api.types.is_dtype_equal(df[column].dtype, expected_dtype):
-            problems[column] = f"expected {expected_dtype}, found {df[column].dtype}"
+        for series in _columns_named(df, column):
+            if not pd.api.types.is_dtype_equal(series.dtype, expected_dtype):
+                problems[column] = f"expected {expected_dtype}, found {series.dtype}"
+                break
     return problems
 
 
@@ -71,15 +82,15 @@ def validate_numeric_ranges(
         minimum, maximum = bounds
         if minimum is not None and maximum is not None and minimum > maximum:
             raise ValueError(f"Minimum exceeds maximum for column {column!r}.")
-        if not pd.api.types.is_numeric_dtype(df[column]):
-            raise TypeError(f"Column {column!r} must have a numeric dtype.")
-        values = df[column]
-        present = values.notna()
-        mask = pd.Series(False, index=df.index)
-        if minimum is not None:
-            mask |= present & (values < minimum)
-        if maximum is not None:
-            mask |= present & (values > maximum)
+        mask = np.zeros(len(df), dtype=bool)
+        for values in _columns_named(df, column):
+            if not pd.api.types.is_numeric_dtype(values):
+                raise TypeError(f"Column {column!r} must have a numeric dtype.")
+            present = values.notna().to_numpy(dtype=bool)
+            if minimum is not None:
+                mask |= present & (values < minimum).fillna(False).to_numpy(dtype=bool)
+            if maximum is not None:
+                mask |= present & (values > maximum).fillna(False).to_numpy(dtype=bool)
         if mask.any():
             problems[column] = df.index[mask].tolist()
     return problems
@@ -97,11 +108,11 @@ def validate_emails(df: pd.DataFrame, columns: list | None = None) -> dict[str, 
     if columns is None:
         columns = email_columns(df)
     problems = {}
-    for column in columns:
-        if column not in df.columns:
-            raise KeyError(f"Column not found: {column}")
-        values = df[column]
-        invalid = values.notna() & ~values.map(is_valid_email).astype(bool)
+    for column in dict.fromkeys(columns):  # A repeated name is checked once, every column.
+        invalid = np.zeros(len(df), dtype=bool)
+        for values in _columns_named(df, column):
+            valid = values.map(is_valid_email).astype(bool).to_numpy(dtype=bool)
+            invalid |= values.notna().to_numpy(dtype=bool) & ~valid
         if invalid.any():
             problems[column] = df.index[invalid].tolist()
     return problems

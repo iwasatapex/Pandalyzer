@@ -30,10 +30,10 @@ save_quality_report(
 | Encodings | UTF-8 (± BOM), UTF-16, Windows-1252, Latin-1, with a fallback if a bad byte appears late in the file |
 | Compression | `.gz`, `.bz2`, `.xz`, single-file `.zip` |
 | Malformed rows | Rows with extra fields are kept (the extras dropped, with a `ParserWarning`); columns never shift |
-| Report preambles | Title and note lines above the header (`"Account statement"`, `"Generated: …"`, blank lines) are skipped and kept in `df.attrs["preamble"]` |
+| Report preambles | Title and note lines above the header (`"Account statement"`, `"Generated: Jan 5, 2024"`, blank lines) are skipped and kept in `df.attrs["preamble"]`. A header that is narrower than the data rows is kept. |
 | Excel headers | A header cell with a line break inside it (`"Hours⏎Worked"`) stays one column |
 
-Pass `sep=`, `encoding=`, `skiprows=`, `header=` or any `pandas.read_csv` option to override detection. Values load unchanged; cleaning is a separate step.
+Pass `sep=` (including regex separators such as `r"\s+"` with `engine="python"`), `encoding=`, `skiprows=`, `header=` or any `pandas.read_csv` option to override detection. Values load unchanged; cleaning is a separate step.
 
 ## Cleaning: `auto_clean`
 
@@ -45,8 +45,16 @@ Runs these steps in order. Each one is a keyword you can switch off.
    - collapse repeated spaces inside them (`"John   Smith"` → `"John Smith"`); line breaks are kept
    - unwrap Excel's `="00123"`
 3. **Placeholders → missing**: `"N/A"`, `"null"`, `"-"`, `"—"`, `"unknown"`, `"TBD"`, `"(blank)"`, `"<NA>"`, `"#N/A"`, `""`… (case-insensitive; override with `missing_markers=`).
-4. **Export leftovers** (`drop_artifacts`): rows that repeat the header (from concatenated exports, even when re-cased) and trailing `Total`, `Subtotal`, `Grand total` or `Sum` rows.
-5. **Emails**: columns of email addresses are detected from their values. Addresses are trimmed and lower-cased, and `mailto:` and display names (`"Ann <ann@x.com>"`) are removed. Malformed addresses (`"@example.com"`, `"bob@"`, `"a@@b.com"`) become missing by default, and the log counts them. Pass `emails="keep"` to leave them in place, or `emails=None` to skip this step.
+4. **Export leftovers** (`drop_artifacts`):
+   - rows that repeat the header (from concatenated exports, even when re-cased). Frames loaded with `header=None` are left alone.
+   - trailing summary rows labelled `Total`, `Subtotal`, `Grand total` or `Sum`. A longer label (`"Total debits"`) counts only when the row leaves empty a column that the other rows fill, so a last record such as a store called `"Total Gym"` is kept.
+5. **Emails**: columns of email addresses are detected from their values.
+   - Addresses are trimmed and lower-cased, and `mailto:` and display names (`"Ann <ann@x.com>"`) are removed.
+   - International addresses (`josé@example.com`, `user@例え.jp`, punycode endings) are valid.
+   - Malformed addresses (`"@example.com"`, `"bob@"`, `"a@@b.com"`, `"john smith@x.com"`) become missing by default, and the log counts them. They are never rewritten into a different address.
+   - Phone numbers in the same column are kept.
+
+   Pass `emails="keep"` to leave malformed addresses in place, or `emails=None` to skip this step.
 6. **Case variants**: `"Cash"`, `" CASH "` and `"cash"` become the most common spelling.
 7. **Type inference** for text columns:
    - integers (`Int64`) and floats, including `"₹1,234.50"`, `"USD 1,234.50"`, `"15 EUR"`, `"15%"` and `"(42)"`
@@ -68,7 +76,7 @@ Runs these steps in order. Each one is a keyword you can switch off.
    - `missing="auto"` fills numbers with the median and low-cardinality text, category and boolean columns with the most common value. Free text, IDs and dates are left missing.
    - Any of `"drop_rows"`, `"fill_mean"`, `"fill_median"`, or `"fill_constant"` with `fill_value=`.
 
-Columns that already have a real dtype (int, float, bool, datetime, category, nullable types) are never converted. Every function accepts every pandas dtype, including `str`, `string`, `object`, `Int64`, `Float64`, `boolean`, tz-aware datetimes, timedeltas, categories, and cells that hold lists.
+Columns that already have a real dtype (int, float, bool, datetime, category, nullable types) are never converted. Category columns of text still get steps 2, 3 and 6 (whitespace, placeholders, case variants) and stay categories, with their category order kept. Every function accepts every pandas dtype, including `str`, `string`, `object`, `Int64`, `Float64`, `boolean`, tz-aware datetimes, timedeltas, categories, and cells that hold lists.
 
 Each step is also available on its own: `clean_column_names`, `strip_whitespace`, `unwrap_excel_text`, `standardize_missing_values`, `drop_repeated_headers`, `drop_total_rows`, `normalize_emails`, `unify_case_variants`, `infer_column_types`, `drop_empty_rows`, `remove_duplicate_rows`, `handle_missing_values`, `fill_missing_auto`.
 
@@ -78,16 +86,16 @@ Each step is also available on its own: `clean_column_names`, `strip_whitespace`
 - **Number words**: `"five"` and `"fifty"` are not converted to numbers.
 - **Out-of-range values**: values like `-3` or `999` are kept. Use `validate_numeric_ranges` to flag them.
 - **Header-less files**: they need `header=None`.
-- **Two-column files with a preamble**: a note like `"Generated: Jan 5, 2024"` splits into two fields at its comma, just like a header. In a two-column file the preamble can't be told apart from the header, so pass `skiprows=`.
+- **Preambles without a title or blank line**: a lone note line such as `"Prepared by Ann, Finance"` directly above the header, with no numbers in it, looks like a header. Pass `skiprows=`.
 - **Short dotted dates**: `"05.03.24"` stays text, because it looks like a version number. Four-digit years (`"05.03.2024"`) are converted.
-- **Phone numbers**: they are kept as text, but their formats are not unified.
+- **Phone numbers**: they are kept as text (also inside email columns), but their formats are not unified.
 
 ## Other modules
 
 | Module | Purpose |
 | --- | --- |
 | `profiler` | Per-column profile, plus before/after quality comparison. |
-| `validators` | Missing-value thresholds, required columns, dtypes, numeric ranges, and `validate_emails`, which lists the rows with malformed addresses for review. |
+| `validators` | Missing-value thresholds, required columns, dtypes, numeric ranges, and `validate_emails`, which lists the rows with malformed addresses for review. All of them handle repeated column names. |
 | `connectors` | `save_csv`, plus `save_quality_report`, which writes strict JSON (NaN, NaT and inf become `null`). |
 
 ## Project layout
@@ -101,6 +109,8 @@ Each step is also available on its own: `clean_column_names`, `strip_whitespace`
 | `.trail/learnings/` | Notes from past work: what was decided, what was ruled out, and why |
 
 ## Tests and linting
+
+GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs ruff and the tests on every push. It covers Python 3.10–3.14 on pandas 2.2, 2.3 and 3.x, with and without pyarrow. Text columns behave differently with pyarrow: Arrow strings run regexes on RE2.
 
 ```bash
 pytest

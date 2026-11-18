@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install "ruff==0.17.1"  # Pinned: new ruff releases add rules.
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported Python with the oldest supported pandas, and the newest pandas 2.
+          - { python: "3.10", pandas: "pandas>=2.2,<2.3", pyarrow: true }
+          - { python: "3.13", pandas: "pandas>=2.3,<3", pyarrow: false }
+          # pandas 3 with and without pyarrow (Arrow strings run regexes on RE2).
+          - { python: "3.12", pandas: "pandas>=3", pyarrow: true }
+          - { python: "3.14", pandas: "pandas>=3", pyarrow: false }
+    name: py${{ matrix.python }} · ${{ matrix.pandas }} · pyarrow=${{ matrix.pyarrow }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]" "${{ matrix.pandas }}"
+      - if: matrix.pyarrow
+        run: pip install pyarrow
+      - run: python -c "import pandas, sys; print(pandas.__version__, sys.version)"
+      - run: pytest -q

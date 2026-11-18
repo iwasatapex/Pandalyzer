@@ -1,8 +1,15 @@
 import math
 import re
+from datetime import date, datetime, timedelta
 
+import numpy as np
 import pandas as pd
-from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
+from pandas.api.types import (
+    is_bool_dtype,
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_timedelta64_dtype,
+)
 
 from autoclean._utils import (
     HORIZONTAL_SPACE,
@@ -35,6 +42,10 @@ _EDGE_SPACE = f"^[{_EDGE_CHARS}]+|[{_EDGE_CHARS}]+$"
 _INNER_SPACE = f"[{HORIZONTAL_SPACE}]{{2,}}|[{HORIZONTAL_SPACE.removeprefix(' ')}]"
 _EXCEL_TEXT = r'^="(.*)"$'  # Excel's ="00123" trick for keeping leading zeros.
 _TOTAL_LABEL = re.compile(r"^(?:grand\s+|sub-?\s?)?totals?\b|^sum\b", re.IGNORECASE)
+# A label that is nothing but "Total", "Subtotal:", "Grand total" or "Sum".
+_TOTAL_ONLY = re.compile(r"^(?:grand\s+|sub-?\s?)?totals?\s*:?$|^sum\s*:?$", re.IGNORECASE)
+_WELL_FILLED = 0.9  # A column this full is one a summary row typically leaves empty.
+_SPACE_CLASS = f"[{HORIZONTAL_SPACE}{LINE_BREAKS}{INVISIBLE}]+"
 
 
 def _is_numeric_column(dtype) -> bool:
@@ -81,8 +92,8 @@ def _fill_with_statistic(df: pd.DataFrame, statistic: str) -> pd.DataFrame:
 def _fill_position(df: pd.DataFrame, position: int, statistic: str) -> bool:
     """Fill one numeric column in place with its mean/median. Return True if filled."""
     series = df.iloc[:, position]
-    if not series.isna().any():
-        return False
+    if not series.isna().any() or series.isna().all():
+        return False  # Nothing to fill, or no values to compute the statistic from.
     fill = getattr(series, statistic)()
     if pd.isna(fill):
         return False
@@ -94,15 +105,42 @@ def _fill_position(df: pd.DataFrame, position: int, statistic: str) -> bool:
     return True
 
 
+def _fits_dtype(dtype, value) -> bool:
+    """Whether ``value`` can fill a ``dtype`` column without changing its type."""
+    if isinstance(dtype, pd.StringDtype):
+        return isinstance(value, str)  # "str"/"string" columns hold only text.
+    if is_text_dtype(dtype) or isinstance(dtype, pd.CategoricalDtype):
+        return True
+    if isinstance(value, str):
+        return False
+    if is_bool_dtype(dtype):
+        return isinstance(value, (bool, np.bool_))
+    if is_numeric_dtype(dtype):
+        return isinstance(value, (int, float, np.number)) and not isinstance(value, bool)
+    if is_datetime64_any_dtype(dtype):
+        return isinstance(value, (datetime, date, np.datetime64))
+    if is_timedelta64_dtype(dtype):
+        return isinstance(value, (timedelta, np.timedelta64))
+    return True
+
+
 def _fill_series_constant(series: pd.Series, value) -> pd.Series:
-    """``series.fillna(value)`` that also works when ``value`` doesn't fit the dtype."""
-    try:
+    """``series.fillna(value)`` that also works when ``value`` doesn't fit the dtype.
+
+    An incompatible value (``"unknown"`` into ``Int64``, a string into a datetime
+    column) turns the column into ``object`` first. pandas 3.1 only warns about
+    such fills, and a later version will raise.
+    """
+    if isinstance(series.dtype, pd.CategoricalDtype):
+        if value not in series.cat.categories:
+            series = series.cat.add_categories([value])
         return series.fillna(value)
-    except (TypeError, ValueError):
-        if isinstance(series.dtype, pd.CategoricalDtype):
-            return series.cat.add_categories([value]).fillna(value)
-        # e.g. "unknown" into Int64/boolean: fall back to a generic object column.
-        return series.astype(object).fillna(value)
+    if _fits_dtype(series.dtype, value):
+        try:
+            return series.fillna(value)
+        except (TypeError, ValueError):
+            pass  # e.g. 0.5 into Int64.
+    return series.astype(object).fillna(value)
 
 
 def _fill_constant(df: pd.DataFrame, value) -> pd.DataFrame:
@@ -230,12 +268,54 @@ def _replace_text(series: pd.Series, pattern: str, replacement: str) -> pd.Serie
     return _map_strings(series, lambda value: compiled.sub(replacement, value))
 
 
+def _has_string_categories(series: pd.Series) -> bool:
+    return isinstance(series.dtype, pd.CategoricalDtype) and all(
+        isinstance(category, str) for category in series.cat.categories
+    )
+
+
+def _same_values(before: pd.Series, after: pd.Series) -> bool:
+    try:
+        return _changed_cells(before, after) == 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _on_categorical(series: pd.Series, func) -> pd.Series:
+    """Apply a text step to a categorical column's values and keep it categorical.
+
+    Categories keep their order (and ``ordered`` flag); categories that the
+    step merges or turns into missing disappear.
+    """
+    values = series.astype(object)
+    changed = func(values)
+    if _same_values(values, changed):
+        return series
+    codes = series.cat.codes.to_numpy()
+    used, first_row = np.unique(codes, return_index=True)
+    new_values = changed.to_numpy(dtype=object)[first_row]
+    categories = list(
+        dict.fromkeys(
+            value for code, value in zip(used, new_values, strict=True)
+            if code >= 0 and not _is_missing_scalar(value)
+        )
+    )  # fmt: skip
+    return pd.Series(
+        pd.Categorical(changed, categories=categories, ordered=series.cat.ordered),
+        index=series.index,
+        name=series.name,
+    )
+
+
 def _map_text_columns(df: pd.DataFrame, func) -> pd.DataFrame:
+    """Apply a column-wise text step to every text column (and string categorical)."""
     result = df.copy()
     for position in range(result.shape[1]):
         series = result.iloc[:, position]
         if is_text_dtype(series.dtype):
             result.isetitem(position, func(series))
+        elif _has_string_categories(series):
+            result.isetitem(position, _on_categorical(series, func))
     return result
 
 
@@ -272,11 +352,8 @@ def standardize_missing_values(
     """
     _require_dataframe(df)
     markers = {str(marker).strip().casefold() for marker in markers}
-    result = df.copy()
-    for position in range(result.shape[1]):
-        series = result.iloc[:, position]
-        if not is_text_dtype(series.dtype):
-            continue
+
+    def mask_markers(series):
         if isinstance(series.dtype, pd.StringDtype):
             is_marker = series.str.strip().str.casefold().isin(markers).fillna(False)
         else:
@@ -284,9 +361,9 @@ def standardize_missing_values(
                 lambda value: isinstance(value, str) and value.strip().casefold() in markers
             )
         is_marker = is_marker.astype(bool)
-        if is_marker.any():
-            result.isetitem(position, series.mask(is_marker))
-    return result
+        return series.mask(is_marker) if is_marker.any() else series
+
+    return _map_text_columns(df, mask_markers)
 
 
 def _case_variant_mapping(series: pd.Series) -> dict:
@@ -312,20 +389,19 @@ def unify_case_variants(df: pd.DataFrame) -> pd.DataFrame:
     are not merged; use ``DataFrame.replace`` for synonyms.
     """
     _require_dataframe(df)
-    result = df.copy()
-    for position in range(result.shape[1]):
-        series = result.iloc[:, position]
-        if not is_text_dtype(series.dtype):
-            continue
+
+    def unify(series):
         try:
             mapping = _case_variant_mapping(series)
         except TypeError:  # Unhashable values (lists, dicts) in an object column.
-            continue
-        if mapping:
-            # One dict-lookup pass; Series.replace scans once per mapping key.
-            replacement = series.map(mapping)
-            result.isetitem(position, series.mask(replacement.notna(), replacement))
-    return result
+            return series
+        if not mapping:
+            return series
+        # One dict-lookup pass; Series.replace scans once per mapping key.
+        replacement = series.map(mapping)
+        return series.mask(replacement.notna(), replacement)
+
+    return _map_text_columns(df, unify)
 
 
 def drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
@@ -334,56 +410,93 @@ def drop_empty_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df.dropna(how="all").copy()
 
 
-def _header_keys(name) -> set[str]:
-    text = " ".join(str(name).split()).casefold()
+def _compact(text: str) -> str:
+    return "".join(text.split()).casefold()
+
+
+def _header_keys(name: str) -> set[str]:
+    key = _compact(name)
     # pandas renames a repeated header "id" to "id.1"; the data row still says "id".
-    return {text, re.sub(r"\.\d+$", "", text)}
+    return {key, re.sub(r"\.\d+$", "", key)}
+
+
+def _compact_text(series: pd.Series) -> pd.Series:
+    """Values with all whitespace removed and case folded (missing stays missing)."""
+    if isinstance(series.dtype, pd.StringDtype):
+        return series.str.replace(_SPACE_CLASS, "", regex=True).str.casefold()
+    return series.map(lambda value: _compact(value) if isinstance(value, str) else None)
 
 
 def drop_repeated_headers(df: pd.DataFrame, header=None) -> pd.DataFrame:
     """Return a copy without rows that repeat the header (left by concatenated exports).
 
     A row counts as a header when every value in it matches its column's name
-    (ignoring case and spacing) and at least half of the columns are filled.
-    ``header`` gives the names to compare with; it defaults to ``df.columns``
-    (pass the original names if the columns were renamed).
+    (ignoring case and spacing) in at least half of the named columns, and in
+    at least two when there are two or more. Only text names count, so frames
+    loaded with ``header=None`` (columns 0, 1, 2…) are left alone. ``header``
+    gives the names to compare with; it defaults to ``df.columns`` (pass the
+    original names if the columns were renamed).
     """
     _require_dataframe(df)
     header = list(df.columns if header is None else header)
     if len(header) != df.shape[1]:
         raise ValueError("header must have one name per column.")
-    if df.empty:
+    named = [isinstance(name, str) and bool(name.strip()) for name in header]
+    if df.empty or not any(named):
         return df.copy()
-    matches = pd.Series(0, index=df.index)
-    mismatch = pd.Series(False, index=df.index)
+    needed = max(min(2, sum(named)), math.ceil(sum(named) / 2))
+    matches = np.zeros(len(df), dtype=int)
+    mismatch = np.zeros(len(df), dtype=bool)
     for position, name in enumerate(header):
         series = df.iloc[:, position]
-        present = series.notna().astype(bool)
-        text = series.map(lambda value: " ".join(str(value).split()).casefold())
-        same = text.isin(_header_keys(name)) & present
-        matches += same.astype(int)
+        if _has_string_categories(series):
+            series = series.astype(object)
+        present = series.notna().to_numpy(dtype=bool)
+        if not named[position] or not is_text_dtype(series.dtype):
+            mismatch |= present  # A number or an unnamed column can't hold a header name.
+            continue
+        same = _compact_text(series).isin(_header_keys(name)).to_numpy(dtype=bool) & present
+        matches += same
         mismatch |= present & ~same
-    is_header = ~mismatch & (matches >= max(1, math.ceil(df.shape[1] / 2)))
+    is_header = ~mismatch & (matches >= needed)
     return df[~is_header].copy()
 
 
 def drop_total_rows(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy without the summary rows at the end of a report export.
 
-    Only trailing rows are considered (empty rows between them are skipped):
-    a row is a summary when its first filled cell starts with "Total",
-    "Subtotal", "Grand total" or "Sum". Matching rows elsewhere are kept.
+    Only trailing rows are considered (empty rows between them are skipped),
+    and only those whose first filled cell starts with "Total", "Subtotal",
+    "Grand total" or "Sum". Such a row is dropped when the label is just that
+    word (``"Total"``, ``"Subtotal:"``), or when the row leaves empty a column
+    that is filled in nearly every other row (``"Total debits"`` with no
+    description or reference). A last row that is a real record, such as a
+    store called ``"Total Gym"`` with all its fields filled, is kept.
     """
     _require_dataframe(df)
-    keep = [True] * len(df)
-    for position in range(len(df) - 1, -1, -1):  # Stops at the first ordinary row.
-        filled = [value for value in df.iloc[position] if not _is_missing_scalar(value)]
-        if not filled:
+    if df.empty:
+        return df.copy()
+    missing = df.isna().to_numpy(dtype=bool)
+    candidates = []  # (position, label), bottom to top.
+    for position in range(len(df) - 1, -1, -1):
+        if missing[position].all():
             continue
-        if not (isinstance(filled[0], str) and _TOTAL_LABEL.match(filled[0].strip())):
+        label = df.iat[position, int(np.argmin(missing[position]))]
+        if not (isinstance(label, str) and _TOTAL_LABEL.match(label.strip())):
+            break
+        candidates.append((position, label.strip()))
+    if not candidates:
+        return df.copy()
+    # How full each column is in the body of the report, without the footer rows.
+    body = ~missing.all(axis=1)
+    body[[position for position, _ in candidates]] = False
+    well_filled = (~missing[body]).mean(axis=0) >= _WELL_FILLED if body.any() else 0
+    keep = np.ones(len(df), dtype=bool)
+    for position, label in candidates:
+        if not (_TOTAL_ONLY.match(label) or (missing[position] & well_filled).any()):
             break
         keep[position] = False
-    return df.iloc[[p for p, kept in enumerate(keep) if kept]].copy()
+    return df[keep].copy()
 
 
 def _is_missing_scalar(value) -> bool:
@@ -481,6 +594,10 @@ def _per_column_step(df, func, step, log, describe):
     result = func(df)
     for position, column in enumerate(result.columns):
         before, after = df.iloc[:, position], result.iloc[:, position]
+        if isinstance(before.dtype, pd.CategoricalDtype) and isinstance(
+            after.dtype, pd.CategoricalDtype
+        ):
+            before, after = before.astype(object), after.astype(object)
         if before.dtype != after.dtype:
             changed = len(before)
         else:

@@ -351,3 +351,185 @@ def test_boolean_column_with_blanks_survives_save_and_reload(tmp_path):
     result = auto_clean(load_csv(path))
 
     assert str(result["flag"].dtype) == "boolean"
+
+
+# ---------------------------------------------------------------------------
+# Regressions found by the re-audit (one test per bug)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "options"),
+    [
+        ("a  b  c\n1  2  3\n4  5  6\n", {"sep": r"\s+"}),
+        ("a::b::c\n1::2::3\n4::5::6\n", {"sep": "::", "engine": "python"}),
+        ("a,b,c\n1,2,3\n4,5,6\n", {"engine": "python"}),
+    ],
+)
+def test_load_csv_regex_multichar_separators_and_python_engine(tmp_path, text, options):
+    path = tmp_path / "data.txt"
+    path.write_text(text)
+
+    df = load_csv(path, **options)
+
+    assert df.columns.tolist() == ["a", "b", "c"]
+    assert len(df) == 2
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("a,b,c\n1,2,3,4\n5,6,7,8\n9,10,11,12\n", 0),  # Data rows wider than the header.
+        ("Title\n\na,b,c\n1,2,3,4\n5,6,7,8\n", 2),
+        ("# exported by tool\n# v2\na,b,c\n1,2,3\n", 2),  # Tie between 1 and 3 fields.
+        ("Account statement\nGenerated: Jan 5, 2024\n\ndate,amount\n2024-01-01,1\n", 3),
+        ("Generated: Jan 5, 2024\ndate,amount,ref\n2024-01-01,1,A\n2024-01-02,2,B\n", 1),
+        ("Prepared by Ann, Finance\n\na,b,c\n1,2,3\n", 2),
+        ("region,2023,2024\nN,1,2\nS,3,4\n", 0),  # Numbers in a header are not a note.
+        ("2023,2024\n1,2\n\n3,4\n", 0),
+    ],
+)
+def test_count_preamble_lines_regressions(text, expected):
+    assert count_preamble_lines(text, ",") == expected
+
+
+def test_load_csv_keeps_header_above_wider_rows(tmp_path):
+    path = tmp_path / "wide.csv"
+    path.write_text("a,b,c\n1,2,3,4\n5,6,7,8\n")
+
+    with pytest.warns(pd.errors.ParserWarning):  # The extra fields are dropped, as documented.
+        df = load_csv(path)
+
+    assert df.columns.tolist() == ["a", "b", "c"]
+    assert len(df) == 2
+
+
+def test_headerless_frames_keep_rows_that_match_column_numbers():
+    df = pd.DataFrame([["0", "1", "2"], ["5", "6", "7"]])  # As load_csv(header=None) gives.
+    assert auto_clean(df).values.tolist() == [[0, 1, 2], [5, 6, 7]]
+    assert len(drop_repeated_headers(df)) == 2
+
+
+def test_repeated_header_needs_two_matching_cells_in_two_columns():
+    df = pd.DataFrame({"name": ["Ann", "name", "Bo"], "nickname": ["A", None, "B"]})
+    assert drop_repeated_headers(df).index.tolist() == [0, 1, 2]
+    df.loc[1, "nickname"] = "Nickname"
+    assert drop_repeated_headers(df).index.tolist() == [0, 2]
+
+
+def test_last_row_named_like_a_total_is_kept():
+    df = pd.DataFrame({"store": ["Fit Co", "Gym Max", "Total Gym"], "sales": [10, 20, 30]})
+    assert auto_clean(df)["store"].tolist() == ["Fit Co", "Gym Max", "Total Gym"]
+
+
+def test_total_rows_that_leave_columns_empty_are_dropped():
+    df = pd.DataFrame(
+        {
+            "date": ["d1", "d2", "d3", None, "Total debits", "Total credits"],
+            "desc": ["a", "b", "c", None, None, None],
+            "amount": [1, 2, 3, None, 6, 9],
+        }
+    )
+    assert drop_total_rows(df)["date"].tolist()[:3] == ["d1", "d2", "d3"]
+    assert len(drop_total_rows(df)) == 4  # The empty row is drop_empty_rows' job.
+
+
+def test_phone_numbers_in_an_email_column_are_kept():
+    contacts = [f"u{i}@x.com" for i in range(9)] + ["+1 (555) 123-4567"]
+    df = pd.DataFrame({"contact": contacts, "id": range(10)})
+
+    result = auto_clean(df)
+
+    assert result["contact"].iloc[-1] == "+1 (555) 123-4567"
+    assert validate_emails(df) == {"contact": [9]}  # Still listed for review.
+
+
+def test_address_with_inner_space_is_not_rewritten():
+    assert normalize_email(" john smith@example.com ") == "john smith@example.com"
+    assert not is_valid_email("john smith@example.com")
+    df = pd.DataFrame({"e": ["john smith@example.com", "a@x.com", "b@x.com"], "i": [1, 2, 3]})
+    assert pd.isna(auto_clean(df)["e"].iloc[0])
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["user@example.xn--p1ai", "josé@example.com", "user@例え.jp", "straße@x.de", "a_b@x.co.uk"],
+)
+def test_international_addresses_are_valid(address):
+    assert is_valid_email(address)
+    assert normalize_email(address) == address.lower()  # lower(), so "ß" stays "ß".
+
+
+@pytest.mark.parametrize("dtype", TEXT_DTYPES)
+def test_infer_handles_nbsp_and_zero_width_without_auto_clean(dtype):
+    values = ["€\u00a012.50", "€\u00a03.10", "\u200b5", "1\u00a0234.00"] * 5
+
+    converted, kind = infer_series_type(_series(values, dtype))
+
+    assert kind == "float"
+    assert converted.tolist()[:4] == [12.5, 3.1, 5.0, 1234.0]
+
+
+def test_leading_zero_codes_after_a_currency_symbol_stay_text():
+    _, kind = infer_series_type(_series(["$0123", "$0456", "$0789"] * 5))
+    assert kind is None
+    _, kind = infer_series_type(_series(["$0.50", "$1.25"] * 5))
+    assert kind == "float"
+
+
+def test_validators_handle_repeated_column_names():
+    from autoclean import validate_column_types, validate_numeric_ranges
+
+    numbers = pd.DataFrame([[1, 200], [5, 6]], columns=["a", "a"])
+    emails = pd.DataFrame([["a@x.com", "b@x.com"], ["bad@", "c@x.com"]], columns=["e", "e"])
+
+    assert validate_numeric_ranges(numbers, {"a": (0, 10)}) == {"a": [0]}
+    assert validate_column_types(numbers, {"a": "int64"}) == {}
+    assert validate_emails(emails) == {"e": [1]}
+
+
+def test_categorical_text_is_cleaned_and_stays_categorical():
+    categories = [" b ", "A", "N/A", "a", "b"]
+    df = pd.DataFrame(
+        {
+            "c": pd.Categorical(["a", "N/A", " b ", "A", "b"], categories=categories, ordered=True),
+            "i": range(5),
+        }
+    )
+    result, log = auto_clean(df, return_log=True)
+
+    assert result["c"].tolist()[:1] == ["a"] and pd.isna(result["c"].iloc[1])
+    assert result["c"].tolist()[2:] == ["b", "a", "b"]
+    assert list(result["c"].cat.categories) == ["b", "a"]  # Original order kept.
+    assert result["c"].cat.ordered
+    assert {entry["step"] for entry in log} >= {"strip_whitespace", "standardize_missing"}
+    again, log_again = auto_clean(result, return_log=True)
+    pd.testing.assert_frame_equal(again, result)
+    assert log_again == []
+
+
+def test_clean_categorical_is_returned_unchanged():
+    series = pd.Categorical(["x", "y", "x"], categories=["y", "x", "z"])
+    df = pd.DataFrame({"c": series, "i": [1, 2, 3]})
+    pd.testing.assert_series_equal(auto_clean(df)["c"], df["c"])
+
+
+def test_inference_on_repeated_values_matches_value_by_value():
+    # Over 20% repeats takes the parse-each-distinct-value-once path.
+    prices, kind = infer_series_type(_series(["$1,200.50", "$3.10", "(0.99)"] * 50))
+    assert kind == "float"
+    assert prices.tolist() == pytest.approx([1200.5, 3.1, -0.99] * 50)
+
+    dates, kind = infer_series_type(_series(["2024-01-05", "05 Feb 2024", "bad"]))
+    assert kind is None  # One bad value in three is under the 95% threshold.
+    dates, kind = infer_series_type(_series(["2024-01-05", "05 Feb 2024"] * 50))
+    assert kind == "datetime"
+    assert dates.tolist()[:2] == [pd.Timestamp(2024, 1, 5), pd.Timestamp(2024, 2, 5)]
+    assert dates.index.equals(pd.RangeIndex(100))
+
+
+def test_notebooks_do_not_point_outside_the_project():
+    from pathlib import Path
+
+    for notebook in (Path(__file__).parents[1] / "notebooks").glob("*.ipynb"):
+        assert "/mnt/data" not in notebook.read_text(encoding="utf-8"), notebook.name

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
-    "pandas>=2.0",
+    "pandas>=2.2",  # Tested in CI on 2.2, 2.3 and 3.x.
 ]
 
 [project.optional-dependencies]

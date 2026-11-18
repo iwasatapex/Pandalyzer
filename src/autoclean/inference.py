@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype, is_float_dtype, is_object_dtype
 
-from autoclean._utils import is_text_dtype
+from autoclean._utils import HORIZONTAL_SPACE, INVISIBLE, is_text_dtype
 
 TRUE_TOKENS = frozenset({"true", "t", "yes", "y", "on"})
 FALSE_TOKENS = frozenset({"false", "f", "no", "n", "off"})
@@ -51,8 +51,30 @@ _INT64_MAX = np.iinfo(np.int64).max
 
 
 def _as_text(series: pd.Series) -> pd.Series:
-    """Non-missing values as stripped strings in a ``string`` Series."""
-    return series.dropna().astype("string").str.strip()
+    """Non-missing values as stripped strings in a ``string`` Series, for parsing only.
+
+    Zero-width characters are removed and other spaces (NBSP, tabs) become
+    plain spaces: on Arrow strings regex ``\\s`` matches ASCII whitespace only.
+    """
+    text = series.dropna().astype("string")
+    text = text.str.replace(f"[{INVISIBLE}]", "", regex=True)
+    text = text.str.replace(f"[{HORIZONTAL_SPACE.removeprefix(' ')}]", " ", regex=True)
+    return text.str.strip()
+
+
+def _per_unique(text: pd.Series, parse):
+    """Run a value-by-value ``parse`` once per distinct value and spread it back.
+
+    Text columns repeat values (cities, statuses, dates), and regex and date
+    parsing dominate the cost of type inference.
+    """
+    codes, uniques = pd.factorize(text)
+    if len(uniques) > 0.8 * len(text):
+        return parse(text)
+    parsed = parse(pd.Series(uniques).astype(text.dtype))
+    if parsed is None:
+        return None
+    return parsed.take(codes).set_axis(text.index)
 
 
 def _strip_number_decorations(text: pd.Series) -> pd.Series:
@@ -91,14 +113,16 @@ def _as_boolean(text: pd.Series, threshold: float):
 
 
 def _as_number(text: pd.Series, threshold: float):
-    numbers = _parse_numbers(text)
+    numbers = _per_unique(text, _parse_numbers)
     if numbers.notna().mean() < threshold:
         # Only if the usual "1,234.5" reading fails: try the decimal-comma
         # convention used across Europe, consistently for the whole column.
-        numbers = _parse_european_numbers(text)
+        numbers = _per_unique(text, _parse_european_numbers)
         if numbers.notna().mean() < threshold:
             return None
-    if text[numbers.notna()].str.match(_LEADING_ZERO).any():
+    # Checked after removing "$", "%" or "(…)", so "$0123" is caught like "0123".
+    parsed = _strip_number_decorations(text[numbers.notna()])
+    if parsed.str.match(_LEADING_ZERO).any():
         return None
     return _narrow_numbers(numbers.astype("float64"))
 
@@ -116,12 +140,13 @@ def _narrow_numbers(numbers: pd.Series):
 def _as_datetime(text: pd.Series, threshold: float, dayfirst: bool):
     # Decide on shape, not parse success: impossible dates such as
     # "2024-02-30" or "0000-00-00" should become missing, not block conversion.
-    if text.str.casefold().str.contains(_DATE_LIKE, regex=True).mean() < threshold:
+    shape = _per_unique(text, lambda t: t.str.casefold().str.contains(_DATE_LIKE, regex=True))
+    if shape.mean() < threshold:
         return None
-    dates = _parse_dates(text, dayfirst, utc=False)
+    dates = _per_unique(text, lambda t: _parse_dates(t, dayfirst, utc=False))
     if dates is None:
         # Mixed time-zone offsets (or aware + naive): normalise everything to UTC.
-        dates = _parse_dates(text, dayfirst, utc=True)
+        dates = _per_unique(text, lambda t: _parse_dates(t, dayfirst, utc=True))
     if dates.notna().mean() < _MIN_DATE_PARSE_RATE:
         return None
     return dates

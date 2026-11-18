@@ -2,16 +2,23 @@
 
 import re
 
+import numpy as np
 import pandas as pd
 
 from autoclean._utils import INVISIBLE, is_text_dtype
 
-# Practical subset of RFC 5322: dot-separated atoms before the "@", and a
-# domain of hyphenated labels ending in an alphabetic TLD. Quoted local parts
-# and IP-literal domains are rejected; they are almost always data errors.
-_ATOM = r"[a-z0-9!#$%&'*+/=?^_`{|}~-]+"
-_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
-_VALID_EMAIL = re.compile(rf"{_ATOM}(?:\.{_ATOM})*@(?:{_LABEL}\.)+[a-z]{{2,63}}")
+# Practical subset of RFC 5322 plus internationalised addresses (RFC 6531):
+# dot-separated atoms before the "@" (letters in any script allowed), and a
+# domain of hyphenated labels ending in a letter TLD or a punycode one
+# ("xn--p1ai"). Quoted local parts, IP-literal domains and spaces are rejected;
+# in real exports they are almost always data errors.
+_ATOM = r"[\w!#$%&'*+/=?^`{|}~-]+"
+_LABEL = r"[^\W_](?:(?:[^\W_]|-){0,61}[^\W_])?"  # Letters/digits in any script, inner "-".
+_TLD = r"(?:[^\W\d_]{2,63}|xn--[a-z0-9-]{1,59})"
+_VALID_EMAIL = re.compile(rf"{_ATOM}(?:\.{_ATOM})*@(?:{_LABEL}\.)+{_TLD}")
+# Phone numbers often share a "contact" column with emails; they are kept.
+_PHONE = re.compile(r"\+?[\d\s().\-/]{7,20}")
+_SAMPLE = 5000  # Values checked when deciding whether a column holds emails.
 _DROP_INVISIBLE = dict.fromkeys(map(ord, INVISIBLE))
 _DISPLAY_NAME = re.compile(r"^[^<>]*<([^<>]+)>$")  # "Ann Lee <ann@example.com>"
 
@@ -22,16 +29,27 @@ _VALID_SHARE = 0.5
 
 
 def normalize_email(value: str) -> str:
-    """Return ``value`` as a bare, lower-case address: no ``mailto:``, display name or spaces."""
-    text = value.strip()
+    """Return ``value`` as a bare, lower-case address without ``mailto:`` or a display name.
+
+    Only surrounding whitespace is removed: an address with a space inside
+    (``"john smith@x.com"``) stays invalid rather than becoming a different one.
+    """
+    text = value.translate(_DROP_INVISIBLE).strip()
     match = _DISPLAY_NAME.match(text)
     if match:
-        text = match.group(1)
+        text = match.group(1).strip()
     if text[:7].casefold() == "mailto:":
-        text = text[7:]
-    text = text.translate(_DROP_INVISIBLE)
+        text = text[7:].strip()
     # Trailing punctuation comes from prose ("write to ann@x.com."); a leading dot is an error.
-    return "".join(text.split()).strip("<>").rstrip(".,;").casefold()
+    # lower(), not casefold(): casefold turns "ß" into "ss", which is a different mailbox.
+    return text.strip("<>").rstrip(".,;").lower()
+
+
+def looks_like_phone(value) -> bool:
+    """True for values such as ``"+1 (555) 123-4567"``: 7 to 15 digits and phone punctuation."""
+    if not isinstance(value, str) or not _PHONE.fullmatch(value.strip()):
+        return False
+    return 7 <= sum(character.isdigit() for character in value) <= 15
 
 
 def is_valid_email(value) -> bool:
@@ -45,6 +63,8 @@ def _present_strings(series: pd.Series) -> pd.Series:
     if not is_text_dtype(series.dtype):
         return series.iloc[0:0]
     present = series.dropna()
+    if isinstance(present.dtype, pd.StringDtype):
+        return present[present.str.strip() != ""]
     return present[present.map(lambda value: isinstance(value, str) and bool(value.strip()))]
 
 
@@ -55,6 +75,8 @@ def is_email_column(series: pd.Series) -> bool:
         return False
     if values.str.contains("@", regex=False).mean() < _AT_SIGN_SHARE:
         return False
+    if len(values) > _SAMPLE:
+        values = values.sample(_SAMPLE, random_state=0)
     return values.map(is_valid_email).mean() >= _VALID_SHARE
 
 
@@ -72,6 +94,8 @@ def normalize_email_series(series: pd.Series, *, invalid: str = "missing") -> pd
 
     ``invalid="missing"`` (default) replaces malformed addresses with a missing
     value; ``invalid="keep"`` leaves them untouched so they can be reviewed.
+    Values that look like phone numbers are always kept: they are contact
+    details in the wrong place, not broken addresses.
     """
     if invalid not in ("missing", "keep"):
         raise ValueError("invalid must be 'missing' or 'keep'.")
@@ -82,7 +106,10 @@ def normalize_email_series(series: pd.Series, *, invalid: str = "missing") -> pd
         address = normalize_email(value)
         if _VALID_EMAIL.fullmatch(address):
             return address
-        return pd.NA if invalid == "missing" else value
+        if invalid == "keep" or looks_like_phone(value):
+            return value
+        # NaN, as Series.mask gives object columns; string dtypes convert it to their NA.
+        return np.nan
 
     # pandas 3 infers "str" for a map that returns strings; keep the column's dtype.
     return series.map(fix).astype(series.dtype)
