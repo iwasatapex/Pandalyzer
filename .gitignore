@@ -15,3 +15,6 @@ htmlcov/
 
 # Files the notebooks write when run.
 /manual_test_outputs/
+
+# Written by scripts/stress_test.py; rerun the script instead of committing them.
+/database/messy_orders_*.csv

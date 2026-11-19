@@ -104,6 +104,7 @@ Each step is also available on its own: `clean_column_names`, `strip_whitespace`
 | --- | --- |
 | `src/autoclean/` | The package: `connectors`, `cleaner`, `inference`, `profiler`, `validators` |
 | `tests/` | The pytest suite, plus the fixture generator and its files in `tests/data/` |
+| `scripts/` | `stress_test.py` writes a 100,000-row messy CSV whose right answers it knows, then scores `auto_clean` on it: `python scripts/stress_test.py`. The CSV goes to `database/`, and git ignores it. |
 | `database/` | `messy_retail_orders.csv`, a 10,000-row messy sample dataset |
 | `notebooks/` | Walkthroughs of each module on the sample dataset. They write to `manual_test_outputs/`, which git ignores. |
 | `.trail/learnings/` | Notes from past work: what was decided, what was ruled out, and why |
