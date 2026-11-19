@@ -135,3 +135,7 @@ ruff format src tests
 - an Excel export with `="00123"` codes and CRLF line endings
 
 [tests/test_csv_fixtures.py](tests/test_csv_fixtures.py) runs the whole project on each file: load, profile, clean, validate, fill, save, reload and report. [tests/test_messy_data.py](tests/test_messy_data.py) unit-tests each kind of messy data on its own. It checks the results against the ground truth that [tests/csv_fixtures.py](tests/csv_fixtures.py) records when it generates the files. After editing that generator, regenerate the files with `python -m tests.csv_fixtures`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
